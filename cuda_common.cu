@@ -43,7 +43,7 @@ void thrust_transpose(T *h_mat_array, T *h_trans_array, int nx, int ny)
     v_out_h = v_out_d;
     //memcpy(h_trans_array, v_trans_h.data(), v_trans_h.size()*sizeof(int));
     float * h_out_array = v_out_h.data();
-    compare_arrays(h_out_array, h_trans_array, size, 1e-4);
+    compare_arrays(h_out_array, h_trans_array, size, float(1e-4));
     print_array(h_out_array + size/2, 16);
 }
 template void thrust_transpose(float *h_mat_array, float *h_trans_array, int nx, int ny);

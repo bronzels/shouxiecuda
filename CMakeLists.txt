@@ -66,10 +66,10 @@ cuda_add_executable(master_atomic master_atomic.cu)
 cuda_add_executable(master_scan common.cpp master_scan.cu)
 
 cuda_add_executable(misc_matmul common.cpp cuda_common.cu misc_matmul.cu)
-cuda_add_executable(t463 t463.cu)
 cuda_add_executable(misc_thrust_sort_max common.cpp misc_thrust_sort_max.cu)
 cuda_add_executable(misc_thrust_foreach common.cpp dotmethod.cpp misc_thrust_foreach.cu)
 cuda_add_executable(misc_thrust_transforms common.cpp misc_thrust_transforms.cu)
+cuda_add_executable(misc_cuda_sort common.cpp misc_cuda_sort.cu)
 
 cuda_add_executable(tiandiao_vecadd tiandiao_vecadd.cu)
 cuda_add_executable(tiandiao_stencil tiandiao_stencil.cu)

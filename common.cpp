@@ -52,6 +52,7 @@ template <typename T> void print_vec(const std::vector<T> &v, int start, int end
     }
 }
 template void print_vec(const std::vector<int> &v, int start, int end, char *sep, int tablen);
+template void print_vec(const std::vector<unsigned int> &v, int start, int end, char *sep, int tablen);
 
 template <typename T>
 T add(const T &a, const T &b)
@@ -355,7 +356,8 @@ void compare_results(float gpu_result, float cpu_result, float precision)
 
 
 //compare arrays
-void compare_arrays(int * a, int * b, int size)
+template <class T>
+void compare_arrays(T * a, T * b, int size)
 {
 	for (int  i = 0; i < size; i++)
 	{
@@ -368,8 +370,13 @@ void compare_arrays(int * a, int * b, int size)
 	}
 	printf("Arrays are same \n");
 }
+template
+void compare_arrays(int * a, int * b, int size);
+template
+void compare_arrays(unsigned int * a, unsigned int * b, int size);
 
-void compare_arrays(float * a, float * b, int size, float precision)
+template <class T>
+void compare_arrays(T * a, T * b, int size, T precision)
 {
 	for (int i = 0; i < size; i++)
 	{
@@ -383,6 +390,10 @@ void compare_arrays(float * a, float * b, int size, float precision)
 	printf("Arrays are same \n");
 	
 }
+template
+void compare_arrays(float * a, float * b, int size, float precision);
+template
+void compare_arrays(double * a, double * b, int size, double precision);
 
 void compare_matrixes(int *a, int *b, int m, int n)
 {

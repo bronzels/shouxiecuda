@@ -142,7 +142,7 @@ int main(void)
         print_array(blasout + size / 2 , 32);
     std::vector<float> v_blasout(blasout, blasout+size);
     std::cout << "Compare blas with fast:" << std::endl;
-    compare_arrays(blasout, dataYfast, size, 1e-4);
+    compare_arrays(blasout, dataYfast, size, float(1e-4));
 
     float *ptrXs = Xs_h.data();
     float *ptrYsa_h = Ysa_h.data();
@@ -155,7 +155,7 @@ int main(void)
     if (printfa)
         print_array(ptrYsa_h + size / 2 , 32);
     std::cout << "Compare cblas with cublas:" << std::endl;
-    compare_arrays(blasout, ptrYsa_h, size, 1e-4);
+    compare_arrays(blasout, ptrYsa_h, size, float(1e-4));
 
     free(blasout);
     cudaFree(dev_a);

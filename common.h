@@ -37,8 +37,10 @@ void initialize(float * input, const int array_size,
 void launch_dummmy_kernel();
 
 //compare two arrays
-void compare_arrays(int * a, int * b, int size);
-void compare_arrays(float * a, float * b, int size, float precision);
+template <class T>
+void compare_arrays(T * a, T * b, int size, T precision);
+template <class T>
+void compare_arrays(T * a, T * b, int size);
 
 //compare two matrics
 void compare_matrixes(int *a, int *b, int m, int n);

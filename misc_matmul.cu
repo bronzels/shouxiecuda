@@ -124,12 +124,12 @@ template struct Dp<float>;
 
 template <class T>
 void matmul_thrust_transform_struct(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k) {
-    thrust::host_vector<T> v_a_h(mat_a, mat_a + m * n);
-    thrust::host_vector<T> v_b_h(mat_b, mat_b + k * n);
-    thrust::device_vector<T> v_a_d;
-    v_a_d = v_a_h;
-    thrust::device_vector<T> v_b_d;
-    v_b_d = v_b_h;
+    //thrust::host_vector<T> v_a_h(mat_a, mat_a + m * n);
+    //thrust::host_vector<T> v_b_h(mat_b, mat_b + k * n);
+    thrust::device_vector<T> v_a_d(mat_a, mat_a + m * n);
+    //v_a_d = v_a_h;
+    thrust::device_vector<T> v_b_d(mat_b, mat_b + k * n);
+    //v_b_d = v_b_h;
     thrust::device_vector<T> v_out_d(m * n, 0);
 
     thrust::device_vector<T> v_b_d_trans(k * n);
@@ -146,10 +146,11 @@ void matmul_thrust_transform_struct(T * mat_a, T * mat_b, T * mat_out, int m, in
             Dp<T>(thrust::raw_pointer_cast(v_a_d.data()), thrust::raw_pointer_cast(v_b_d.data()), m, n, k));
     time2 = clock();
     std::cout<<"time spent executing by the GPU thrust_transform_struct: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
-    thrust::host_vector<T> v_out_h(m * n, 0);
-    v_out_h = v_out_d;
+    //thrust::host_vector<T> v_out_h(m * n, 0);
+    //v_out_h = v_out_d;
     int byte_size = m*n*sizeof(T);
-    memcpy(mat_out, v_out_h.data(), byte_size);
+    cudaMemcpy(mat_out, thrust::raw_pointer_cast(v_out_d.data()), byte_size, cudaMemcpyDeviceToHost);
+    //memcpy(mat_out, v_out_h.data(), byte_size);
 }
 
 template <class T>
