@@ -6,9 +6,12 @@
 #include <thrust/fill.h>
 #include <thrust/replace.h>
 #include <thrust/functional.h>
-#include "cublas_v2.h"
 #include <iostream>
 #include <algorithm>
+
+#include "cublas_v2.h"
+
+#include "cblas.h"
 
 #include "common.h"
 
@@ -64,7 +67,8 @@ int main(void)
     print_array(Y_h.data(), 10);
 
     float A = 10.;
-    int size = 1 << 29;
+    int size = 1 << 27;
+    //int size = 1 << 10;
     thrust::host_vector<float> Xs_h(size);
     std::generate(Xs_h.begin(), Xs_h.end(), drand48);
     thrust::device_vector<float> Xs(size);
@@ -77,6 +81,7 @@ int main(void)
     Yfast = Ysa_h;
 
     clock_t time1, time2;
+    bool printfa = true;
 
     time1 = clock();
     saxpy_slow(A, Xs, Yslow);
@@ -89,8 +94,6 @@ int main(void)
     time2 = clock();
     std::cout<<"datasize: " << size << ", saxpy_fast time: ";
     std::cout<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
-
-    bool printfa = true;
 
     thrust::host_vector<float> Yslow_h = Yslow;
     float *dataYslow = Yslow_h.data();
@@ -141,6 +144,24 @@ int main(void)
     std::cout << "Compare blas with fast:" << std::endl;
     compare_arrays(blasout, dataYfast, size, 1e-4);
 
+    float *ptrXs = Xs_h.data();
+    float *ptrYsa_h = Ysa_h.data();
+    time1 = clock();
+    cblas_saxpy(size, A, ptrXs, 1, ptrYsa_h, 1);
+    time2 = clock();
+    std::cout<<"datasize: " << size << ", cblas time: ";
+    std::cout<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
+
+    if (printfa)
+        print_array(ptrYsa_h + size / 2 , 32);
+    std::cout << "Compare cblas with cublas:" << std::endl;
+    compare_arrays(blasout, ptrYsa_h, size, 1e-4);
+
+    free(blasout);
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cublasDestroy(handle);
+
     return 0;
 }
 /*
@@ -155,9 +176,9 @@ same
 datasize: 134217728, saxpy_slow time: 3.53
 datasize: 134217728, saxpy_fast time: 1.39
 same
-                            saxpy_slow              saxpy_fast                  cublas
-datasize: 4194304           0.12                    0.12
-datasize: 33554432          0.88                    0.35
-datasize: 134217728         3.53                    1.39                        0.00479789
-datasize: 536870912         14.01                   5.55                        0.0191455
+                            saxpy_slow       saxpy_fast     cublas          openblas
+datasize: 4194304           0.12             0.12
+datasize: 33554432          0.88             0.35
+datasize: 134217728         3.53             1.39           0.00479789      0.67
+datasize: 536870912         14.01            5.55           0.0191455       2.66
  */

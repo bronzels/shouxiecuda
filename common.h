@@ -66,14 +66,13 @@ void print_matrix(float * matrix, int nx, int ny);
 int* get_matrix(int rows, int columns);
 
 //matrix transpose in CPU
-void mat_transpose_cpu(int * mat, int * transpose, int nx, int ny);
+template <class T>
+void mat_transpose_cpu(T * mat, T * transpose, int nx, int ny);
 
 //print_time_using_host_clock
 void print_time_using_host_clock(clock_t start, clock_t end);
 
 void printData(char *msg, int *in, const int size);
-
-void compare_arrays(float * a, float * b, float size);
 
 void sum_array_cpu(float* a, float* b, float *c, int size);
 

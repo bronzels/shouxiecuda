@@ -5,7 +5,15 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "cublas_v2.h"
-
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <thrust/transform.h>
+#include <thrust/inner_product.h>
+#include <thrust/sequence.h>
+#include <thrust/copy.h>
+#include <thrust/fill.h>
+#include <thrust/replace.h>
+#include <thrust/functional.h>
 #include "common.h"
 
 #include "helper_cuda.h"
@@ -14,6 +22,8 @@
 #include "cblas.h"
 
 using namespace std;
+
+#include "cuda_common.cuh"
 
 #define BDIM 32
 #define M 3072*8
@@ -30,7 +40,8 @@ using namespace std;
 
 #define IPAD 2
 
-void matmul_cpu(float * mat_a, float * mat_b, float * mat_out, int m, int n, int k)
+template <class T>
+void matmul_cpu(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k)
 {
     for(int x = 0; x < m; x ++)
     {
@@ -46,7 +57,8 @@ void matmul_cpu(float * mat_a, float * mat_b, float * mat_out, int m, int n, int
     }
 }
 
-void tranpose_matrix(float * input, float * output, int m, int n)
+template <class T>
+void tranpose_matrix(T * input, T * output, int m, int n)
 {
     for(int x = 0; x < m; x ++)
     {
@@ -57,13 +69,91 @@ void tranpose_matrix(float * input, float * output, int m, int n)
     }
 }
 
-void matmul_cpu_blas(float * mat_a, float * mat_b, float * mat_out, int m, int n, int k) {
+template <class T>
+void matmul_cpu_blas(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k) {
     //cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, n, k, 1.0, mat_a, k, mat_b, k, 0.0, mat_out, n);
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, mat_a, k, mat_b, n, 0.0, mat_out, n);
 }
 
+template <class T>
+void matmul_thrust_2loops_inner_product(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k) {
+    thrust::host_vector<T> v_a_h(mat_a, mat_a + m * n);
+    thrust::host_vector<T> v_b_h(mat_b, mat_b + k * n);
+    thrust::device_vector<T> v_a_d;
+    v_a_d = v_a_h;
+    thrust::device_vector<T> v_b_d;
+    v_b_d = v_b_h;
+    thrust::device_vector<T> v_out_d(m * n, 0);
 
-__global__ void matmul(float * mat_a, float * mat_b, float * mat_out, int m, int n, int k)
+    thrust::device_vector<T> v_b_d_out(k * n);
+    thrust_transpose(v_b_d, v_b_d_out, k, n);
+
+    std::cout<<"start executing by the GPU thrust_2loops_inner_product"<<std::endl;
+    clock_t time1,time2;
+    time1 = clock();
+    //for loop + inner_product
+    for(int i = 0; i < m; ++i)
+    {
+        for(int j = 0; j < n; ++j)
+        {
+            v_out_d[i*k + j] = thrust::inner_product(v_a_d.begin() + k * i, v_a_d.begin() + (i+1) * k, v_b_d.begin() + k * j, 0.0f);
+        }
+    }
+    time2 = clock();
+    std::cout<<"time spent executing by the GPU thrust_2loops_inner_product: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
+}
+
+template <class T>
+struct Dp{
+        T *A, *B;
+        int m,n,k;
+        Dp(T *_A, T *_B, int _m, int _n, int _k): A(_A), B(_B), m(_m), n(_n), k(_k) {
+            std::cout<<"m:"<<m<<", n:"<<n<<", k:"<<k<<std::endl;
+        };
+        __host__ __device__ T operator()(size_t idx){
+            T sum = 0.0f;
+            int row = idx / n;
+            int col = idx % n;
+            //int col = idx - (row * k);
+            for (int i = 0; i < k; i++)
+                sum += A[k * row + i] * B[n * i + col];
+            return sum;
+        }
+};
+template struct Dp<float>;
+
+template <class T>
+void matmul_thrust_transform_struct(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k) {
+    thrust::host_vector<T> v_a_h(mat_a, mat_a + m * n);
+    thrust::host_vector<T> v_b_h(mat_b, mat_b + k * n);
+    thrust::device_vector<T> v_a_d;
+    v_a_d = v_a_h;
+    thrust::device_vector<T> v_b_d;
+    v_b_d = v_b_h;
+    thrust::device_vector<T> v_out_d(m * n, 0);
+
+    thrust::device_vector<T> v_b_d_trans(k * n);
+    //thrust_transpose(v_b_d, v_b_d_trans, k, n);
+    //trans     1.1     diff
+    //notrans   0.25    same
+
+    std::cout<<"start executing by the GPU thrust_transform_struct"<<std::endl;
+    clock_t time1,time2;
+    time1 = clock();
+    // transform + struct
+    thrust::transform(thrust::counting_iterator<int>(0), thrust::counting_iterator<int>(m*n),
+            v_out_d.begin(),
+            Dp<T>(thrust::raw_pointer_cast(v_a_d.data()), thrust::raw_pointer_cast(v_b_d.data()), m, n, k));
+    time2 = clock();
+    std::cout<<"time spent executing by the GPU thrust_transform_struct: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
+    thrust::host_vector<T> v_out_h(m * n, 0);
+    v_out_h = v_out_d;
+    int byte_size = m*n*sizeof(T);
+    memcpy(mat_out, v_out_h.data(), byte_size);
+}
+
+template <class T>
+__global__ void matmul(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k)
 {
     unsigned int x = blockDim.x * blockIdx.x + threadIdx.x;
     unsigned int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -79,7 +169,8 @@ __global__ void matmul(float * mat_a, float * mat_b, float * mat_out, int m, int
     }
 }
 
-__global__ void matmul_smem(float * mat_a, float * mat_b, float * mat_out, int m, int n, int k)
+template <class T>
+__global__ void matmul_smem(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k)
 {
     __shared__ float sA[BDIM][BDIM];
     __shared__ float sB[BDIM][BDIM];
@@ -106,7 +197,8 @@ __global__ void matmul_smem(float * mat_a, float * mat_b, float * mat_out, int m
     }
 }
 
-__global__ void matmul_smem_pad(float * mat_a, float * mat_b, float * mat_out, int m, int n, int k)
+template <class T>
+__global__ void matmul_smem_pad(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k)
 {
     __shared__ float sA[BDIM][BDIM+1];
     __shared__ float sB[BDIM][BDIM+1];
@@ -175,19 +267,19 @@ int main(int argc, char** argv)
     }
     */
 
-    float * h_mat_array_b_t = (float*)malloc(byte_size_b);
-    float * h_mat_array_mul_blas = (float*)malloc(byte_size);
+    //float * h_mat_array_b_t = (float*)malloc(byte_size_b);
+    float * h_mat_array_out = (float*)malloc(byte_size);
     //tranpose_matrix(h_mat_array_b, h_mat_array_b_t, k, n);
     t_start = clock();
-    matmul_cpu_blas(h_mat_array_a, h_mat_array_b, h_mat_array_mul_blas, m, n, k);
+    matmul_cpu_blas(h_mat_array_a, h_mat_array_b, h_mat_array_out, m, n, k);
     t_stop = clock();
     printf("BLAS time: %f \n", (double)((double)(t_stop - t_start)/CLOCKS_PER_SEC));
     //printf("Compare CPU with %s\n", "openBLAS");
-    //compare_matrixes(h_mat_array_mul_blas, h_mat_array_mul, m, n);
+    //compare_matrixes(h_mat_array_out, h_mat_array_mul, m, n);
     if ( print_a)
     {
-        print_matrix(h_mat_array_mul_blas, 2, 10);
-        print_matrix(h_mat_array_mul_blas + (m - 2) * n, 2, 10);
+        print_matrix(h_mat_array_out, 2, 10);
+        print_matrix(h_mat_array_out + (m - 2) * n, 2, 10);
     }
     //return 0;
 
@@ -281,7 +373,7 @@ int main(int argc, char** argv)
         //compare the CPU and GPU transpose matrix for validity
         printf("Compare CPU with %s\n", kernel_name);
         //compare_matrixes(h_ref, h_mat_array_mul, m, n);
-        compare_matrixes(h_ref, h_mat_array_mul_blas, m, n, 1e-3);
+        compare_matrixes(h_ref, h_mat_array_out, m, n, 1e-3);
         /*
         if( kernel_num != 0)
         {
@@ -291,6 +383,27 @@ int main(int argc, char** argv)
             memcpy(h_ref_prev, h_ref, byte_size);
         */
     }
+    /*
+    memset(h_mat_array_out, 0, size);
+    matmul_thrust_2loops_inner_product(h_mat_array_a,  h_mat_array_b, h_mat_array_out, m, n, k);
+    if ( print_a)
+    {
+        print_matrix(h_mat_array_out, 2, 10);
+        print_matrix(h_mat_array_out + (m - 2) * n, 2, 10);
+    }
+    printf("Compare GPU(kernel,cublas) with matmul_thrust_2loops_inner_product:\n");
+    compare_matrixes(h_ref, h_mat_array_out, m, n, 1e-3);
+    */
+
+    memset(h_ref, 0, byte_size);
+    matmul_thrust_transform_struct(h_mat_array_a,  h_mat_array_b, h_ref, m, n, k);
+    if ( print_a)
+    {
+        print_matrix(h_ref, 2, 10);
+        print_matrix(h_ref + (m - 2) * n, 2, 10);
+    }
+    printf("Compare CPU with matmul_thrust_transform_struct:\n");
+    compare_matrixes(h_ref, h_mat_array_out, m, n, 1e-3);
 
     free(h_mat_array_a);
     free(h_mat_array_b);
@@ -346,14 +459,14 @@ Matrics are same
 
 
 matrixes: 3072 * 1024, 1024 * 2048; block: 16 * 16
-                    cpu                     gpu                     gpu_smem                   gpu_smem_padded
+                    cpu                     gpu                     gpu_smem                   gpu_smem_padded          thrust
 python              23.659889698028564      0.24089908599853516     0.21659564971923828        0.21481561660766602
-c++                 13.920000               0.072272                0.051916                   0.024310
+c++                 13.920000               0.072272                0.051916                   0.024310                 0.25
 
 matrixes: 3072*8 * 1024*8 , 1024*8 * 2048*8; block: 32 * 32
-            cpu(python:numpy, c++:openBLAS)       gpu                   gpu_smem              gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy
+            cpu(python:numpy, c++:openBLAS)       gpu                   gpu_smem              gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy                       thrust
 python      46.0459623336792                      68.0925920009613      88.5304069519043      78.57171964645386                         13.312400390625001      0.5030193328857422
-c++         115.130000(不转置113.600000)           65.640182             74.491241             13.259836                 0.729070
+c++         115.130000(不转置113.600000)           65.640182             74.491241             13.259836                 0.729070                                                           114.42
 
 
                             global精度        smem精度

@@ -4,24 +4,35 @@ using namespace std;
 #include <iterator>
 #include <algorithm>
 #include <iostream>
-
-
-
+#include <dlfcn.h>
 
 /*
-#define SEP ", "
-#define TABLEN 32
-template <typename T>
-std::ostream& operator<< (std::ostream& out, const std::vector<T>& v);
+template <typename T, char *sep, int tablen>
+std::ostream& operator<< (std::ostream& out, const std::vector<T>& v) {
+    int v_size = v.size();
+    //cout << "size:" << size << ", tablen:" << tablen << ", (size + tablen - 1) / tablen:" << (size + tablen - 1) / tablen << std::endl;
+    if (!v.empty()) {
+        for(int i = 0; i < (v_size + tablen - 1) / tablen; i ++)
+        {
+            int offset = tablen * i;
+            std::vector<T> cut_vector(v.begin() + offset, v.begin() + std::min(v_size, offset + tablen));
+            for (auto el : cut_vector) {
+                std::cout << el << sep;
+            }
+            cout << std::endl;
+        }
+    }
+    return out;
+}
+template
+std::ostream& operator<< <", ", 5>(std::ostream& out, const std::vector<int>& v);
 */
+
 template <typename T> void print_vec(const std::vector<T> &v, int start, int end, char *sep, int tablen) {
-    //out << std::endl;
-    //int size = v.size();
     int size = end - start;
     int v_size = v.size();
     //cout << "size:" << size << ", tablen:" << tablen << ", (size + tablen - 1) / tablen:" << (size + tablen - 1) / tablen << std::endl;
     if (!v.empty()) {
-        //for(int i = 0; i < (size + TABLEN - 1) / TABLEN; i ++)
         for(int i = 0; i < (size + tablen - 1) / tablen; i ++)
         {
             /*
@@ -29,20 +40,16 @@ template <typename T> void print_vec(const std::vector<T> &v, int start, int end
             std::vector<T> last  = v.begin() + std::min(size - 1, offset + TABLEN - 1);
             std::copy(first, last, std::ostream_iterator<T>(out, SEP));
             */
-            //int offset = tablen * i;
             int offset = start + tablen * i;
-            //std::vector<T> cut_vector(v.begin() + offset, v.begin() + std::min(size, offset + tablen));
             std::vector<T> cut_vector(v.begin() + offset, v.begin() + std::min(v_size, offset + tablen));
             for (auto el : cut_vector) {
                 std::cout << el << sep;
             }
-            cout << '\b';
-            cout << " ";
+            //cout << '\b';
+            //cout << " ";
             cout << std::endl;
-            //cout << std::endl;
         }
     }
-    //return out;
 }
 template void print_vec(const std::vector<int> &v, int start, int end, char *sep, int tablen);
 
@@ -302,7 +309,8 @@ int reduction_cpu(int * input, const int size)
 }
 
 //cpu transpose
-void mat_transpose_cpu(int * mat, int * transpose, int nx, int ny)
+template <class T>
+void mat_transpose_cpu(T * mat, T * transpose, int nx, int ny)
 {
 	for (int  iy = 0; iy < ny; iy++)
 	{
@@ -312,6 +320,8 @@ void mat_transpose_cpu(int * mat, int * transpose, int nx, int ny)
 		}
 	}
 }
+template void mat_transpose_cpu(int * mat, int * transpose, int nx, int ny);
+template void mat_transpose_cpu(float * mat, float * transpose, int nx, int ny);
 
 //compare results
 void compare_results(int gpu_result, int cpu_result)

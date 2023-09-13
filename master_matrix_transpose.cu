@@ -5,16 +5,28 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include "common.h"
+#include "cublas_v2.h"
+
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <thrust/transform.h>
+#include <thrust/sequence.h>
+#include <thrust/copy.h>
+#include <thrust/fill.h>
+#include <thrust/replace.h>
+#include <thrust/gather.h>
 
 #include "helper_cuda.h"
 #include "helper_functions.h"
 
+#include "common.h"
+#include "cuda_common.cuh"
+
 using namespace std;
 
-#define NX 1024
+#define NX 1024*8
 //1024//32//
-#define NY 1024
+#define NY 1024*8
 //1024//8//
 #define BDIMX 64
 //128//4//4//8//8//4//32//16//64//8//128
@@ -22,7 +34,8 @@ using namespace std;
 //32//8//32//64//256//32//64//16//128
 #define IPAD 2
 
-__global__ void copy_row(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void copy_row(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockDim.x + threadIdx.x;
     int iy = blockDim.y * blockDim.y + threadIdx.y;
@@ -33,7 +46,8 @@ __global__ void copy_row(int * mat, int * transpose, int nx, int ny)
     }
 }
 
-__global__ void copy_column(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void copy_column(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockDim.x + threadIdx.x;
     int iy = blockDim.y * blockDim.y + threadIdx.y;
@@ -44,7 +58,8 @@ __global__ void copy_column(int * mat, int * transpose, int nx, int ny)
     }
 }
 
-__global__ void transpose_read_row_write_column(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_read_row_write_column(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockIdx.x + threadIdx.x;
     int iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -55,7 +70,8 @@ __global__ void transpose_read_row_write_column(int * mat, int * transpose, int 
     }
 }
 
-__global__ void transpose_read_column_write_row(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_read_column_write_row(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockIdx.x + threadIdx.x;
     int iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -66,7 +82,8 @@ __global__ void transpose_read_column_write_row(int * mat, int * transpose, int 
     }
 }
 
-__global__ void transpose_unroll4_row(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_unroll4_row(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockIdx.x * 4 + threadIdx.x;
     int iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -83,7 +100,8 @@ __global__ void transpose_unroll4_row(int * mat, int * transpose, int nx, int ny
     }
 }
 
-__global__ void transpose_unroll4_col(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_unroll4_col(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockIdx.x * 4 + threadIdx.x;
     int iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -100,7 +118,8 @@ __global__ void transpose_unroll4_col(int * mat, int * transpose, int nx, int ny
     }
 }
 
-__global__ void transpose_unroll4_col2(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_unroll4_col2(T * mat, T * transpose, int nx, int ny)
 {
     int ix = blockDim.x * blockIdx.x + threadIdx.x;
     int iy = blockDim.y * blockIdx.y * 4 + threadIdx.y;
@@ -117,7 +136,8 @@ __global__ void transpose_unroll4_col2(int * mat, int * transpose, int nx, int n
     }
 }
 
-__global__ void transpose_diagonal_row(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_diagonal_row(T * mat, T * transpose, int nx, int ny)
 {
     int blk_x = blockIdx.x;
     int blk_y = (blockIdx.x + blockIdx.y) % gridDim.x;
@@ -131,7 +151,8 @@ __global__ void transpose_diagonal_row(int * mat, int * transpose, int nx, int n
     }
 }
 
-__global__ void transpose_diagonal_row2(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_diagonal_row2(T * mat, T * transpose, int nx, int ny)
 {
     unsigned int blk_y = blockIdx.x;
     unsigned int blk_x = (blockIdx.x + blockIdx.y) % gridDim.x;
@@ -144,7 +165,8 @@ __global__ void transpose_diagonal_row2(int * mat, int * transpose, int nx, int 
     }
 }
 
-__global__ void transpose_diagonal_col(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_diagonal_col(T * mat, T * transpose, int nx, int ny)
 {
     unsigned int blk_y = blockIdx.x;
     unsigned int blk_x = (blockIdx.x + blockIdx.y) % gridDim.x;
@@ -157,7 +179,8 @@ __global__ void transpose_diagonal_col(int * mat, int * transpose, int nx, int n
     }
 }
 
-__global__ void transpose_smem_orig(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_smem_orig(T * mat, T * transpose, int nx, int ny)
 {
     __shared__ int tile[BDIMY][BDIMX];
 
@@ -190,7 +213,8 @@ __global__ void transpose_smem_orig(int * mat, int * transpose, int nx, int ny)
     }
 }
 
-__global__ void transpose_smem_orig_pad(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_smem_orig_pad(T * mat, T * transpose, int nx, int ny)
 {
     __shared__ int tile[BDIMY][BDIMX+IPAD];
 
@@ -223,7 +247,8 @@ __global__ void transpose_smem_orig_pad(int * mat, int * transpose, int nx, int 
     }
 }
 
-__global__ void transpose_smem_orig_unrolling(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_smem_orig_unrolling(T * mat, T * transpose, int nx, int ny)
 {
     __shared__ int tile[BDIMY][2*BDIMX];
 
@@ -267,7 +292,8 @@ __global__ void transpose_smem_orig_unrolling(int * mat, int * transpose, int nx
     */
 }
 
-__global__ void transpose_smem_orig_pad_unrolling(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_smem_orig_pad_unrolling(T * mat, T * transpose, int nx, int ny)
 {
     /* master
     __shared__ int tile[BDIMY][BDIMX + IPAD];
@@ -345,7 +371,8 @@ __global__ void transpose_smem_orig_pad_unrolling(int * mat, int * transpose, in
     }
 }
 
-__global__ void transpose_smem(int * mat, int * transpose, int nx, int ny)
+template <class T>
+__global__ void transpose_smem(T * mat, T * transpose, int nx, int ny)
 {
     __shared__ int tile[BDIMY][BDIMX];
 
@@ -412,7 +439,7 @@ mat[in_index]: 8, tile[threadIdx.y][threadIdx.x]: 8, transpose[out_index]: 8
 
 
 
-/*
+/* 1024 * 1024
 0       Copy row                            diff    0.030400
 1       Copy column                         diff    0.029952
 2       Read row write column               same    0.126464
@@ -429,6 +456,13 @@ mat[in_index]: 8, tile[threadIdx.y][threadIdx.x]: 8, transpose[out_index]: 8
 13      SMem orig pad unrolling(master)     same    0.058688/0.059968/0.058464/0.058272/0.060000
 13      SMem orig pad unrolling(me)         same    0.052032/0.055616/0.055584/0.053568/0.053376        new best
 11      SMem                                same    0.125024
+        thrust                              same    0.02
+        cublas                              same    7.1616e-05
+
+                    kernel no.5   kernel no.13   thrust      cublas
+1024*1024           0.065984      0.052032       0.02        7.1616e-05
+1024*8*1024*8       5.371072      9.609568       1.73        0.00164365
+1024*16*1024*16     21.688736     37.767040      6.9         0.00650122
 
 ！！！这2个核函数，block的大小超过64*16时就会失败，小于这个值都是成功的
 12，我根据SMem orig改写的SMem orig pad
@@ -445,6 +479,37 @@ Unroll 4 col，瘦块
 8*32        0.049792    best
 4*32        0.053760
  */
+
+
+void cublas_transpose(float *h_mat_array, float *h_trans_array, int nx, int ny) {
+    int size = nx * ny;
+    int byte_size = size * sizeof(float);
+    float *h_out_array = (float *)malloc(byte_size);
+    float *d_mat_array, *d_out_array;
+    cudaMalloc((float**)&d_mat_array, byte_size);
+    cudaMalloc((void**)&d_out_array, byte_size);
+    cudaMemcpy(d_mat_array, h_mat_array, byte_size, cudaMemcpyHostToDevice);
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+    cudaEvent_t start, end;
+    cudaEventCreate(&start);
+    cudaEventCreate(&end);
+    cudaEventRecord(start);
+    float alpha = 1.;
+    float beta  = 0.;
+    cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, nx, ny, &alpha, d_mat_array, ny, &beta, d_mat_array, ny, d_out_array, nx);
+    //cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, nx, ny, &alpha, d_mat_array, ny, &beta, d_mat_array, ny, d_out_array, nx);
+    cudaEventRecord(end);
+    cudaEventSynchronize(end);
+    float time;
+    cudaEventElapsedTime(&time, start, end);
+    std::cout<<"time spent executing by the GPU cublas: "<<time/1000.<<std::endl;
+    cudaMemcpy(h_out_array, d_out_array, byte_size, cudaMemcpyDeviceToHost);
+
+    compare_arrays(h_out_array, h_trans_array, size, 1e-4);
+    print_array(h_out_array + size/2, 16);
+}
+
 int main(int argc, char** argv)
 {
 	//default values for variabless
@@ -459,17 +524,17 @@ int main(int argc, char** argv)
     kernel_num = 13;
 
 	int size = nx * ny;
-	int byte_size = sizeof(int*) * size;
+	int byte_size = sizeof(float) * size;
 
 	printf("Matrix transpose for %d X % d matrix with block size %d X %d \n",nx,ny,block_x,block_y);
 
-	int * h_mat_array = (int*)malloc(byte_size);
-	int * h_trans_array = (int*)malloc(byte_size);
-	int * h_ref = (int*)malloc(byte_size);
+    float * h_mat_array = (float*)malloc(byte_size);
+    float * h_trans_array = (float*)malloc(byte_size);
+    float * h_ref = (float*)malloc(byte_size);
 
 	//initialize matrix with integers between one and ten
-	initialize(h_mat_array,size ,INIT_ONE_TO_TEN);
-    //initialize(h_mat_array,size ,INIT_RANDOM);
+	//initialize(h_mat_array,size ,INIT_ONE_TO_TEN);
+    initialize(h_mat_array,size ,INIT_RANDOM);
 
 	//matirx transpose in CPU
 	mat_transpose_cpu(h_mat_array, h_trans_array, nx, ny);
@@ -587,7 +652,11 @@ int main(int argc, char** argv)
 	cudaMemcpy(h_ref, d_trans_array, byte_size, cudaMemcpyDeviceToHost);
 
 	//compare the CPU and GPU transpose matrix for validity
-	compare_arrays(h_ref, h_trans_array, size);
+	compare_arrays(h_ref, h_trans_array, size, 1e-4);
+
+    print_array(h_trans_array + size/2, 16);
+    thrust_transpose(h_mat_array, h_trans_array, nx, ny);
+    cublas_transpose(h_mat_array, h_trans_array, nx, ny);
 
     /*
     printf("before transpose:\n");
@@ -595,6 +664,7 @@ int main(int argc, char** argv)
     printf("after transpose:\n");
     print_matrix(h_ref, ny, nx);
     */
+
 
 	cudaDeviceReset();
 	return EXIT_SUCCESS;
