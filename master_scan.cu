@@ -413,7 +413,7 @@ void exec_kernel_global(dim3 grid, dim3 block, int * h_output, int * h_ref, int 
     print_arrays_toafile_side_by_side(h_ref, h_output, input_size, "scan_outputs.txt");
     cudaFree(d_aux);
 }
-/*
+/*1 << 10
 #define BLOCK_SIZE 512
  *  efficient_exclusive_scan_single_block                       0.027648
  *  efficient_exclusive_scan_single_block_smem                  0.026624
@@ -438,12 +438,91 @@ void exec_kernel_global(dim3 grid, dim3 block, int * h_output, int * h_ref, int 
  *  exec_kernel_global_exclusive(new by master)                 0.031744
  *  exec_kernel_global_inclusive(__dev)                         0.029344
  */
+/*
+1 << 22
+Kernel execution time using events : 11.396000
+end datasize:4194304, is_inplace:1, is_cpu:1, is_inclusive:1, time:0.04
+end datasize:4194304, is_inplace:1, is_cpu:1, is_inclusive:0, time:0.01
+end datasize:4194304, is_inplace:1, is_cpu:0, is_inclusive:1, time:0.02
+end datasize:4194304, is_inplace:1, is_cpu:0, is_inclusive:0, time:0.03
+end datasize:4194304, is_inplace:0, is_cpu:1, is_inclusive:1, time:0.16
+end datasize:4194304, is_inplace:0, is_cpu:1, is_inclusive:0, time:0.13
+end datasize:4194304, is_inplace:0, is_cpu:0, is_inclusive:1, time:0.07
+end datasize:4194304, is_inplace:0, is_cpu:0, is_inclusive:0, time:0.07
+
+1 << 23
+Kernel execution time using events : 5.745408
+end datasize:8388608, is_inplace:1, is_cpu:1, is_inclusive:1, time:0.08
+end datasize:8388608, is_inplace:1, is_cpu:1, is_inclusive:0, time:0.02
+end datasize:8388608, is_inplace:1, is_cpu:0, is_inclusive:1, time:0.04
+end datasize:8388608, is_inplace:1, is_cpu:0, is_inclusive:0, time:0.04
+end datasize:8388608, is_inplace:0, is_cpu:1, is_inclusive:1, time:0.31
+end datasize:8388608, is_inplace:0, is_cpu:1, is_inclusive:0, time:0.25
+end datasize:8388608, is_inplace:0, is_cpu:0, is_inclusive:1, time:0.13
+end datasize:8388608, is_inplace:0, is_cpu:0, is_inclusive:0, time:0.14
+
+*/
+void thrust_scan(int *h_input, int *h_output, int size, bool is_inplace, bool is_cpu, bool is_inclusive) {
+    std::cout <<"start datasize:"<<size<<", is_inplace:"<<is_inplace<<", is_cpu:"<<is_cpu<<", is_inclusive:"<<is_inclusive<< std::endl;
+    int byte_size = size *sizeof(int);
+    clock_t time1,time2;
+    time1 = clock();
+    if(is_inplace) {
+        if(is_cpu) {
+            if(is_inclusive)
+                thrust::inclusive_scan(thrust::host, h_input, h_input + size, h_input);
+            else
+                thrust::exclusive_scan(thrust::host, h_input, h_input + size, h_input);
+        }
+        else {
+            int *d_input;
+            checkCudaErrors(cudaMalloc(&d_input, byte_size));
+            cudaMemcpy(d_input, h_input, byte_size, cudaMemcpyHostToDevice);
+            if(is_inclusive)
+                thrust::inclusive_scan(thrust::device, d_input, d_input + size, d_input);
+            else
+                thrust::exclusive_scan(thrust::device, d_input, d_input + size, d_input);
+            cudaMemcpy(h_input, d_input, byte_size, cudaMemcpyDeviceToHost);
+            cudaFree(d_input);
+        }
+    }
+    else {
+        if(is_cpu) {
+            //thrust::host_vector<int> v_h_src(size);
+            thrust::host_vector<int> v_h_src(h_input, h_input+size);
+            //memcpy(thrust::raw_pointer_cast(v_h_src.data()), h_input, byte_size);
+            thrust::host_vector<int> v_h_dst(size);
+            if(is_inclusive)
+                thrust::inclusive_scan(v_h_src.begin(), v_h_src.end(), v_h_dst.begin());
+            else
+                thrust::exclusive_scan(v_h_src.begin(), v_h_src.end(), v_h_dst.begin());
+            memcpy(h_output, thrust::raw_pointer_cast(v_h_dst.data()), byte_size);
+        }
+        else {
+            //！！！没有这回事，不增加v_h_src就会报告thrust parallel_for failed: cudaErrorInvalidResourceHandle: invalid resource handle
+            //thrust::host_vector<int> v_h_src(size);
+            //memcpy(thrust::raw_pointer_cast(v_h_src.data()), h_input, byte_size);
+            thrust::device_vector<int> v_d_src(size);
+            //v_d_src = v_h_src;
+            cudaMemcpy(thrust::raw_pointer_cast(v_d_src.data()), h_input, byte_size, cudaMemcpyHostToDevice);
+            thrust::device_vector<int> v_d_dst(size);
+            if(is_inclusive)
+                thrust::inclusive_scan(v_d_src.begin(), v_d_src.end(), v_d_dst.begin());
+            else
+                thrust::exclusive_scan(v_d_src.begin(), v_d_src.end(), v_d_dst.begin());
+            cudaMemcpy(h_output, thrust::raw_pointer_cast(v_d_dst.data()), byte_size, cudaMemcpyDeviceToHost);
+        }
+    }
+    time2 = clock();
+    std::cout<<"end datasize:"<<size<<", is_inplace:"<<is_inplace<<", is_cpu:"<<is_cpu<<", is_inclusive:"<<is_inclusive<<", time:"<<(double)(time2 - time1) / CLOCKS_PER_SEC<<std::endl;;
+}
 
 int main(int argc, char**argv)
 {
 	printf("Scan algorithm execution starterd \n");
 
-	int input_size = 1 << 10;//BLOCK_SIZE;//32;
+	//int input_size = 1 << 10;//BLOCK_SIZE;//32;
+    int input_size = 1 << 23;
 
 	if (argc > 1)
 	{
@@ -452,12 +531,13 @@ int main(int argc, char**argv)
 
 	const int byte_size = sizeof(int) * input_size;
 
-	int * h_input, *h_output, *h_ref, *h_aux;
+	int * h_input, *h_output, *h_output_inclusive, *h_output_exclusive, *h_ref, *h_aux;
 
 	clock_t cpu_start, cpu_end, gpu_start, gpu_end;
 
 	h_input = (int*)malloc(byte_size);
 	h_output = (int*)malloc(byte_size);
+    h_output_inclusive = (int*)malloc(byte_size);
 	h_ref = (int*)malloc(byte_size);
 
     //initialize(h_input, input_size, INIT_ONE);
@@ -467,6 +547,8 @@ int main(int argc, char**argv)
 	cpu_start = clock();
 	//inclusive_scan_cpu(h_input, h_output, input_size);
     exclusive_scan_cpu(h_input, h_output, input_size);
+    h_output_exclusive = h_output;
+    inclusive_scan_cpu(h_input, h_output_inclusive, input_size);
 	cpu_end = clock();
     //print_array(h_output, input_size);
     //return 0;
@@ -484,10 +566,43 @@ int main(int argc, char**argv)
 
 	compare_arrays(h_ref, h_output, input_size);
 
+    int *h_input_yat = (int *)malloc(byte_size);
+    int *h_thrust_output = (int *)malloc(byte_size);
+    memcpy(h_input_yat, h_input, byte_size);
+    thrust_scan(h_input_yat, h_thrust_output, input_size, true, true, true);
+    compare_arrays(h_input_yat, h_output_inclusive, input_size);
+    memcpy(h_input_yat, h_input, byte_size);
+    thrust_scan(h_input_yat, h_thrust_output, input_size, true, true, false);
+    compare_arrays(h_input_yat, h_output_exclusive, input_size);
+    memcpy(h_input_yat, h_input, byte_size);
+    thrust_scan(h_input_yat, h_thrust_output, input_size, true, false, true);
+    compare_arrays(h_input_yat, h_output_inclusive, input_size);
+    memcpy(h_input_yat, h_input, byte_size);
+    thrust_scan(h_input_yat, h_thrust_output, input_size, true, false, false);
+    compare_arrays(h_input_yat, h_output_exclusive, input_size);
+
+    thrust_scan(h_input, h_thrust_output, input_size, false, true, true);
+    compare_arrays(h_thrust_output, h_output_inclusive, input_size);
+    thrust_scan(h_input, h_thrust_output, input_size, false, true, false);
+    compare_arrays(h_thrust_output, h_output_exclusive, input_size);
+    thrust_scan(h_input, h_thrust_output, input_size, false, false, true);
+    compare_arrays(h_thrust_output, h_output_inclusive, input_size);
+    thrust_scan(h_input, h_thrust_output, input_size, false, false, false);
+    compare_arrays(h_thrust_output, h_output_exclusive, input_size);
+
     free(h_input);
     free(h_output);
+    free(h_output_inclusive);
     free(h_ref);
     cudaFree(d_input);
+
+    std::cout << "free h_input_yat" << std::endl;
+    free(h_input_yat);
+    std::cout << "free h_thrust_output" << std::endl;
+    free(h_thrust_output);
+
+//！！！没有这回事，不管是host/device的数据指针，如果被用作thrust::host_vector/thrust::device_vector形如 thrust::host_vector(ptr, ptr+1)的初始化,
+//就会被vector的析构释放，同时如果再被free/cudaFree就会出现重复释放的问题。free会打印整个对战，cudaFree会简单illegal mem错误。
 
 	gpuErrchk(cudaDeviceReset());
 	return 0;
