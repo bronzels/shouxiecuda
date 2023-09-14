@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <CL/opencl.h>
+#include <string.h>
 
 #include "common.h"
 
@@ -27,7 +28,7 @@ int main( int argc, char* argv[]) {
     cl_int err;
     double sum = 0;
 
-    int n = 1 << 25;
+    int n = 1 << 27;
     float *h_a;
     float *h_b;
     float *h_c;
@@ -68,8 +69,104 @@ int main( int argc, char* argv[]) {
     globalSize = ceil(n/(float)localSize)*localSize;
 
     err = clGetPlatformIDs(1, &platform, NULL);
+    //err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
     err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
     context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
+    //改成cpu以后create context报错Segmentation fault，需要下载编译intel的驱动，把so放到路径才行
+    if ( err != 0 )
+    {
+        printf("cl env context create error, code:%d, exit\n", err);
+        exit(2);
+    }
+    size_t buf_len = 255;
+    char info[buf_len];
+    memset(info, '\0', buf_len);
+    int length;
+
+    cl_platform_info plat_info_des_list[] = {
+            CL_PLATFORM_PROFILE,
+            CL_PLATFORM_VERSION,
+            CL_PLATFORM_NUMERIC_VERSION,
+            CL_PLATFORM_NAME,
+            CL_PLATFORM_VENDOR,
+            CL_PLATFORM_EXTENSIONS,
+            CL_PLATFORM_EXTENSIONS_WITH_VERSION,
+            CL_PLATFORM_HOST_TIMER_RESOLUTION,
+    };
+    char plat_info_des_str_list[][255] = {
+            "CL_PLATFORM_PROFILE",
+            "CL_PLATFORM_VERSION",
+            "CL_PLATFORM_NUMERIC_VERSION",
+            "CL_PLATFORM_NAME",
+            "CL_PLATFORM_VENDOR",
+            "CL_PLATFORM_EXTENSIONS",
+            "CL_PLATFORM_EXTENSIONS_WITH_VERSION",
+            "CL_PLATFORM_HOST_TIMER_RESOLUTION",
+    };
+    length = sizeof(plat_info_des_list) / sizeof(plat_info_des_list[0]);
+    printf("length:%d\n", length);
+    for (int i = 0; i< length; i++) {
+        size_t info_put_len;
+        err = clGetPlatformInfo(platform, plat_info_des_list[i], buf_len, info, &info_put_len);
+        if (err != CL_SUCCESS)
+            printf("%s: can't get\n", plat_info_des_str_list[i]);
+        else {
+            /*
+            if( info_put_len < buf_len)
+                info[info_put_len] = '\0';
+            else
+                info[buf_len-1] = '\0';
+            */
+            printf("%s: %s\n", plat_info_des_str_list[i], info);
+        }
+    }
+    /*
+CL_PLATFORM_PROFILE: FULL_PROFILE
+CL_PLATFORM_VERSION: OpenCL 3.0 CUDA 12.0.139
+CL_PLATFORM_NUMERIC_VERSION:
+CL_PLATFORM_NAME: NVIDIA CUDA
+CL_PLATFORM_VENDOR: NVIDIA Corporation
+CL_PLATFORM_EXTENSIONS: can't get
+CL_PLATFORM_EXTENSIONS_WITH_VERSION: NVIDIA Corporation
+CL_PLATFORM_HOST_TIMER_RESOLUTION:
+     */
+    cl_device_info dev_info_des_list[] = {
+            CL_DEVICE_GLOBAL_MEM_CACHE_SIZE,
+            CL_DEVICE_BUILT_IN_KERNELS,
+            CL_DEVICE_PARENT_DEVICE,
+            CL_DEVICE_PARTITION_TYPE,
+            CL_DEVICE_REFERENCE_COUNT,
+    };
+    char dev_info_des_str_list[][255] = {
+            "CL_DEVICE_GLOBAL_MEM_CACHE_SIZE",
+            "CL_DEVICE_BUILT_IN_KERNELS",
+            "CL_DEVICE_PARENT_DEVICE",
+            "CL_DEVICE_PARTITION_TYPE",
+            "CL_DEVICE_REFERENCE_COUNT",
+    };
+    length = sizeof(dev_info_des_list) / sizeof(dev_info_des_list[0]);
+    printf("length:%d\n", length);
+    for (int i = 0; i< length; i++) {
+        //memset(info, '\0', buf_len);
+        memset(info, 0, buf_len);
+        size_t info_put_len;
+        err = clGetDeviceInfo(device_id, dev_info_des_list[i], buf_len, info, &info_put_len);
+        if (err != CL_SUCCESS)
+            printf("%s: can't get\n", dev_info_des_str_list[i]);
+        else {
+            /*
+            if( info_put_len < buf_len)
+                info[info_put_len] = '\0';
+            else
+                info[buf_len-1] = '\0';
+            */
+            printf("%s: %s\n", dev_info_des_str_list[i], info);
+        }
+    }
+    /*
+    device不报错，可是信息全是空的
+    */
+
     queue = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err);
     program = clCreateProgramWithSource(context, 1,
                                         (const char **) & kernelSource, NULL, &err);

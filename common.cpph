@@ -39,10 +39,10 @@ enum INIT_PARAM{
 };
 
 //simple initialization
-void initialize(int * input, const int array_size,
+void initialize(int * input, const unsigned int array_size,
 	INIT_PARAM PARAM = INIT_ONE_TO_TEN, int x = 0);
 
-void initialize(float * input, const int array_size,
+void initialize(float * input, const unsigned int array_size,
 	INIT_PARAM PARAM = INIT_ONE_TO_TEN);
 
 void launch_dummmy_kernel();

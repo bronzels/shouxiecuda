@@ -210,7 +210,7 @@ int* get_matrix(int rows, int columns)
 }
 
 //simple initialization
-void initialize(int * input, const int array_size,
+void initialize(int * input, const unsigned int array_size,
 	INIT_PARAM PARAM, int x)
 {
 	if (PARAM == INIT_ONE)
@@ -264,7 +264,7 @@ void initialize(int * input, const int array_size,
 	}
 }
 
-void initialize(float * input, const int array_size,
+void initialize(float * input, const unsigned int array_size,
 	INIT_PARAM PARAM)
 {
 	if (PARAM == INIT_ONE)
@@ -287,8 +287,9 @@ void initialize(float * input, const int array_size,
         default_random_engine e(time(NULL));
 		for (int i = 0; i < array_size; i++)
 		{
-			input[i] = u(e);
-		}
+			//input[i] = u(e);
+            input[i] = 0+1.0*(rand()%RAND_MAX)/RAND_MAX *(1-0);
+        }
 	}
 	else if (PARAM == INIT_FOR_SPARSE_METRICS)
 	{
