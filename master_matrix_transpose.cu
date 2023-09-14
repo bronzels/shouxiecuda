@@ -19,7 +19,7 @@
 #include "helper_cuda.h"
 #include "helper_functions.h"
 
-#include "common.h"
+#include "common.cpph"
 #include "cuda_common.cuh"
 
 using namespace std;

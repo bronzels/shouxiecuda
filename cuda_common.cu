@@ -1,5 +1,13 @@
 #include "cuda_common.cuh"
-#include "common.h"
+#include "common.cpph"
+
+void ShowCudaGpuInfo()
+{
+    int num_gpus = 0;
+    cudaGetDeviceCount(&num_gpus);
+
+    std::printf("CUDA : cudaGetDeviceCount : number of CUDA devices:\t%d\n", num_gpus);
+}
 
 struct transpose_index : public thrust::unary_function<size_t, size_t>
 {

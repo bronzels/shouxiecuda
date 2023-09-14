@@ -5,7 +5,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include "common.h"
+#include "common.cpph"
 
 #define BDIMX 32
 #define BDIMY 32

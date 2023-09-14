@@ -14,7 +14,7 @@
 #include <thrust/fill.h>
 #include <thrust/replace.h>
 #include <thrust/functional.h>
-#include "common.h"
+#include "common.cpph"
 
 #include "helper_cuda.h"
 #include "helper_functions.h"

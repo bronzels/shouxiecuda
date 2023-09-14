@@ -19,6 +19,8 @@
 #include <iostream>
 #include <assert.h>
 
+void ShowCudaGpuInfo();
+
 template <class T>
 void thrust_transpose(T *h_mat_array, T *h_trans_array, int nx, int ny);
 template <class T>

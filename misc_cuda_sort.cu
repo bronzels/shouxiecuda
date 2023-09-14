@@ -8,7 +8,7 @@
 #include <thrust/sort.h>
 #include <thrust/copy.h>
 
-#include "common.h"
+#include "common.cpph"
 
 #define MAX_DEPTH 16
 #define INSERTION_SORT 128

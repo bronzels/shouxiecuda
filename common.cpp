@@ -1,10 +1,23 @@
-#include "common.h"
+#include "common.cpph"
 using namespace std;
 
 #include <iterator>
 #include <algorithm>
 #include <iostream>
 #include <dlfcn.h>
+
+template <typename T>
+void sum_arry_cpu(T *a, T *b, T *c, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        c[i] = a[i] + b[i];
+    }
+}
+template
+void sum_arry_cpu(int *a, int *b, int *c, int size);
+template
+void sum_arry_cpu(float *a, float *b, float *c, int size);
 
 /*
 template <typename T, char *sep, int tablen>

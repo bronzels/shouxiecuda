@@ -4,7 +4,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include "common.h"
+#include "common.cpph"
 #include "cuda_common.cuh"
 
 #include "helper_cuda.h"

@@ -5,7 +5,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include "common.h"
+#include "common.cpph"
 
 __global__ void copy_row(int * mat, int * transpose, int nx, int ny)
 {

@@ -4,6 +4,8 @@
 #include "helper_cuda.h"
 #include "helper_functions.h"
 
+#include "common.cpph"
+
 #include <stdio.h>
 #include <ctime>
 #include <random>
@@ -36,27 +38,6 @@ __global__ void sum_array_gpu_misaligned_write(int *a, int *b, int *c, int size,
     {
         c[k] = a[gid] + b[gid];
     }
-}
-
-void sum_arry_cpu(int *a, int *b, int *c, int size)
-{
-    for (int i = 0; i < size; i++)
-    {
-        c[i] = a[i] + b[i];
-    }
-}
-
-void compare_arrays(int * a, int * b, int size)
-{
-    for (int i = 0; i < size; i++)
-    {
-        if (a[i] != b[i])
-        {
-            printf("Arrays are different on i:%d, a[i]:%d, b[i]:%d \n", i, a[i], b[i]);
-            return;
-        }
-    }
-    printf("Arrays are same \n");
 }
 
 inline void gpuAssert(cudaError_t code, const char * file, int line, bool abort = true)
@@ -324,7 +305,7 @@ L2 Compression Ratio	0
 
 int async(int argc, char** argv)
 {
-    int size = 1 << 27;
+    int size = 1 << 25;
     int block_size = 128;
 
     unsigned int NO_BYTES = size * sizeof(int);
@@ -369,7 +350,7 @@ int async(int argc, char** argv)
     cudaMalloc(&d_b, NO_BYTES);
     cudaMalloc(&d_c, NO_BYTES);
 
-    int const NUM_STREAMS = 4;
+    int const NUM_STREAMS = 8;
     int ELEMENTS_PER_STREAM = size / NUM_STREAMS;
     int BYTES_PER_STREAM = NO_BYTES / NUM_STREAMS;
     cudaStream_t streams[NUM_STREAMS];
@@ -409,6 +390,8 @@ int async(int argc, char** argv)
     printf("time spent executing by the GPU: %.6f\n", gpu_time);
 
     cudaDeviceSynchronize();
+    time2 = clock();
+    printf("time spent executing openCL sum_array:%f s\n", (double)(time2-time1)/CLOCKS_PER_SEC);
 
     compare_arrays(h_c, gpu_results, size);
 
@@ -432,6 +415,8 @@ int main(int argc, char** argv)
     async(argc, argv);
 }
 /*
+time spent executing openCL(only kernel) sum_array:1.209376 ms
+time spent executing openCL sum_array:0.050000 s
     int size = 1 << 25;
     int const NUM_STREAMS = 8;
 ------------sync------------time spent executing by the GPU: 51.621441
@@ -439,6 +424,8 @@ Arrays are same
 ------------async------------time spent executing by the GPU: 51.985504
 Arrays are same
 
+time spent executing openCL(only kernel) sum_array:4.796416 ms
+time spent executing openCL sum_array:0.200000 s
      int size = 1 << 27;
     int const NUM_STREAMS = 8;
 ------------sync------------time spent executing by the GPU: 204.370270

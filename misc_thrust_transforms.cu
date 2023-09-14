@@ -13,7 +13,7 @@
 
 #include "cblas.h"
 
-#include "common.h"
+#include "common.cpph"
 
 void saxpy_slow(float A, thrust::device_vector<float>&X, thrust::device_vector<float>& Y)
 {
