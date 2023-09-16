@@ -199,7 +199,13 @@ __global__ void matmul_smem(T * mat_a, T * mat_b, T * mat_out, int m, int n, int
 }
 
 template <class T>
-__global__ void matmul_smem_pad(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k)
+__global__ void matmul_smem_pad(
+        T * mat_a,
+        T * mat_b,
+        T * mat_out,
+        int m,
+        int n,
+        int k)
 {
     __shared__ float sA[BDIM][BDIM+1];
     __shared__ float sB[BDIM][BDIM+1];
@@ -225,6 +231,15 @@ __global__ void matmul_smem_pad(T * mat_a, T * mat_b, T * mat_out, int m, int n,
         *(mat_out + n * x + y) = tmp;
     }
 }
+
+
+
+
+
+
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -460,14 +475,14 @@ Matrics are same
 
 
 matrixes: 3072 * 1024, 1024 * 2048; block: 16 * 16
-                    cpu                     gpu                     gpu_smem                   gpu_smem_padded          thrust
+                    cpu                     gpu                     gpu_smem                   gpu_smem_padded          thrust       opencl       opencl_smem       opencl_smem_padded
 python              23.659889698028564      0.24089908599853516     0.21659564971923828        0.21481561660766602
-c++                 13.920000               0.072272                0.051916                   0.024310                 0.25
+c++                 13.920000               0.072272                0.051916                   0.024310                 0.25         0.07
 
 matrixes: 3072*8 * 1024*8 , 1024*8 * 2048*8; block: 32 * 32
-            cpu(python:numpy, c++:openBLAS)       gpu                   gpu_smem              gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy                       thrust
+            cpu(python:numpy, c++:openBLAS)       gpu                   gpu_smem              gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy                       thrust       opencl       opencl_smem       opencl_smem_padded
 python      46.0459623336792                      68.0925920009613      88.5304069519043      78.57171964645386                         13.312400390625001      0.5030193328857422
-c++         115.130000(不转置113.600000)           65.640182             74.491241             13.259836                 0.729070                                                           114.42
+c++         115.130000(不转置113.600000)           65.640182             74.491241             13.259836                 0.729070                                                           114.42       65.12
 
 
                             global精度        smem精度

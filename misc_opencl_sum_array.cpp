@@ -6,6 +6,8 @@
 
 #include "common.cpph"
 
+using namespace std;
+
 const char * kernelSource =                                     "\n" \
 "#pragma OPENCL EXTENSION cl_khr_fp64 : enable                   \n" \
 "__kernel void vecAdd( __global float *a,                        \n" \
@@ -23,6 +25,7 @@ const char * kernelSource =                                     "\n" \
 "\n";
 
 int main( int argc, char* argv[]) {
+    printf(kernelSource);
     cl_int err = CL_SUCCESS;
     cl_int api_err;
 
@@ -46,10 +49,10 @@ int main( int argc, char* argv[]) {
     cl::NDRange localSize(local_size);
     cl::NDRange globalSize(ceil(n/(float)local_size)*local_size);
 
-    std::vector<cl::Platform> platforms;
+    vector<cl::Platform> platforms;
     err |= cl::Platform::get(&platforms);
     cl::Platform platform = platforms[0];
-    std::vector<cl::Device> devices;
+    vector<cl::Device> devices;
     err |= platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
     cl::Device device = devices[0];
 
@@ -88,12 +91,12 @@ int main( int argc, char* argv[]) {
     length = sizeof(plat_info_des_list) / sizeof(plat_info_des_list[0]);
     printf("length:%d\n", length);
     for (int i = 0; i< length; i++) {
-        std::string info;
+        string info;
         err = platform.getInfo(plat_info_des_list[i], &info);
         if (err != CL_SUCCESS)
-            std::cout<<plat_info_des_str_list[i]<<": can't get"<<std::endl;
+            cout<<plat_info_des_str_list[i]<<": can't get"<<endl;
         else {
-            std::cout<<plat_info_des_str_list[i]<<": "<<info<<std::endl;
+            cout<<plat_info_des_str_list[i]<<": "<<info<<endl;
         }
     }
     /*
@@ -123,12 +126,12 @@ CL_PLATFORM_HOST_TIMER_RESOLUTION:
     length = sizeof(dev_info_des_list) / sizeof(dev_info_des_list[0]);
     printf("length:%d\n", length);
     for (int i = 0; i< length; i++) {
-        std::string info;
+        string info;
         err = device.getInfo(dev_info_des_list[i], &info);
         if (err != CL_SUCCESS)
-            std::cout<<dev_info_des_str_list[i]<<": can't get"<<std::endl;
+            cout<<dev_info_des_str_list[i]<<": can't get"<<endl;
         else {
-            std::cout<<dev_info_des_str_list[i]<<": "<<info<<std::endl;
+            cout<<dev_info_des_str_list[i]<<": "<<info<<endl;
         }
     }
     /*
@@ -148,7 +151,7 @@ CL_PLATFORM_HOST_TIMER_RESOLUTION:
     time1 = clock();
     cl::Buffer d_a(context, CL_MEM_READ_ONLY, bytes);
     cl::Buffer d_b(context, CL_MEM_READ_ONLY, bytes);
-    cl::Buffer d_c(context, CL_MEM_READ_ONLY, bytes);
+    cl::Buffer d_c(context, CL_MEM_WRITE_ONLY, bytes);
 
     err |= queue.enqueueWriteBuffer(d_a, CL_TRUE, 0,
                                     bytes, h_a);

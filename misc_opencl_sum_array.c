@@ -232,6 +232,14 @@ CL_PLATFORM_HOST_TIMER_RESOLUTION:
     free(h_c);
     free(h_c_cpu);
 
+    cl_int status;
+    status = clReleaseKernel(kernel);  // Release kernel.
+    status = clReleaseProgram(program);  // Release program object.
+    status = clReleaseMemObject(d_a);  // Release mem object.
+    status = clReleaseMemObject(d_b);
+    status = clReleaseMemObject(d_c);
+    status = clReleaseCommandQueue(queue);  // Release  Command queue.
+    status = clReleaseContext(context);  // Release context.
 }
 
 

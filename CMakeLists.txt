@@ -7,6 +7,7 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_ARCHITECTURES 52 60 61 75 86 87)
 
 #file(COPY model1.onnx DESTINATION .)
+file(COPY misc_opencl_matmul.cl DESTINATION .)
 
 # CUDA
 find_package(CUDA REQUIRED)
@@ -80,6 +81,7 @@ cuda_add_executable(misc_cuda_sort common.cpp misc_cuda_sort.cu)
 cuda_add_executable(misc_opencl_device common.cpp cuda_common.cu misc_opencl_device.cpp)
 cuda_add_executable(misc_opencl_sum_array_c common.c misc_opencl_sum_array.c)
 cuda_add_executable(misc_opencl_sum_array_cpp common.cpp misc_opencl_sum_array.cpp)
+cuda_add_executable(misc_opencl_matmul common.cpp misc_opencl_matmul.cpp)
 
 cuda_add_executable(tiandiao_vecadd tiandiao_vecadd.cu)
 cuda_add_executable(tiandiao_stencil tiandiao_stencil.cu)

@@ -15,6 +15,8 @@
 
 #include "cublas_v2.h"
 
+#include "CL/cl.hpp"
+
 #include <stdio.h>
 #include <iostream>
 #include <assert.h>
