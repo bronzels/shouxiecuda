@@ -14,7 +14,7 @@
 #include <thrust/fill.h>
 #include <thrust/replace.h>
 #include <thrust/functional.h>
-#include "common.cpph"
+#include "common.hpp"
 
 #include "helper_cuda.h"
 #include "helper_functions.h"
@@ -389,7 +389,7 @@ int main(int argc, char** argv)
         //compare the CPU and GPU transpose matrix for validity
         printf("Compare CPU with %s\n", kernel_name);
         //compare_matrixes(h_ref, h_mat_array_mul, m, n);
-        compare_matrixes(h_ref, h_mat_array_out, m, n, 1e-3);
+        compare_matrixes(h_ref, h_mat_array_out, m, n, (float)1e-3);
         /*
         if( kernel_num != 0)
         {
@@ -408,7 +408,7 @@ int main(int argc, char** argv)
         print_matrix(h_mat_array_out + (m - 2) * n, 2, 10);
     }
     printf("Compare GPU(kernel,cublas) with matmul_thrust_2loops_inner_product:\n");
-    compare_matrixes(h_ref, h_mat_array_out, m, n, 1e-3);
+    compare_matrixes(h_ref, h_mat_array_out, m, n, (float)1e-3);
     */
 
     memset(h_ref, 0, byte_size);
@@ -419,7 +419,7 @@ int main(int argc, char** argv)
         print_matrix(h_ref + (m - 2) * n, 2, 10);
     }
     printf("Compare CPU with matmul_thrust_transform_struct:\n");
-    compare_matrixes(h_ref, h_mat_array_out, m, n, 1e-3);
+    compare_matrixes(h_ref, h_mat_array_out, m, n, (float)1e-3);
 
     free(h_mat_array_a);
     free(h_mat_array_b);

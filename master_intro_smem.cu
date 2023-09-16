@@ -5,7 +5,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include "common.cpph"
+#include "common.hpp"
 
 #define SHARED_ARRAY_SIZE 128
 

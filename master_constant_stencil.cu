@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "common.cpph"
+#include "common.hpp"
 #include "cuda_common.cuh"
 
 #include "cuda.h"

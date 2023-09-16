@@ -1,5 +1,5 @@
 #include "cuda_common.cuh"
-#include "common.cpph"
+#include "common.hpp"
 
 void checkError(cl_int error, int line) {
     if (error != CL_SUCCESS) {

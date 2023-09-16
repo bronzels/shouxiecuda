@@ -6,7 +6,7 @@
 #include "helper_cuda.h"
 #include "helper_functions.h"
 
-#include "common.cpph"
+#include "common.hpp"
 
 __global__ void dynamic_parallelism_check(int size, int depth)
 {

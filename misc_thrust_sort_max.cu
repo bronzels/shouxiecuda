@@ -10,7 +10,7 @@
 #include "helper_cuda.h"
 #include "helper_functions.h"
 
-#include "common.cpph"
+#include "common.hpp"
 
 int thrust_example_sort()
 {

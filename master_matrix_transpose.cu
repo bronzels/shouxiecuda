@@ -19,7 +19,7 @@
 #include "helper_cuda.h"
 #include "helper_functions.h"
 
-#include "common.cpph"
+#include "common.hpp"
 #include "cuda_common.cuh"
 
 using namespace std;
@@ -506,7 +506,7 @@ void cublas_transpose(float *h_mat_array, float *h_trans_array, int nx, int ny) 
     std::cout<<"time spent executing by the GPU cublas: "<<time/1000.<<std::endl;
     cudaMemcpy(h_out_array, d_out_array, byte_size, cudaMemcpyDeviceToHost);
 
-    compare_arrays(h_out_array, h_trans_array, size, 1e-4);
+    compare_arrays(h_out_array, h_trans_array, size, (float)1e-4);
     print_array(h_out_array + size/2, 16);
 }
 
@@ -652,7 +652,7 @@ int main(int argc, char** argv)
 	cudaMemcpy(h_ref, d_trans_array, byte_size, cudaMemcpyDeviceToHost);
 
 	//compare the CPU and GPU transpose matrix for validity
-	compare_arrays(h_ref, h_trans_array, size, 1e-4);
+	compare_arrays(h_ref, h_trans_array, size, (float)1e-4);
 
     print_array(h_trans_array + size/2, 16);
     thrust_transpose(h_mat_array, h_trans_array, nx, ny);

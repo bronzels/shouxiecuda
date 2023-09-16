@@ -4,7 +4,7 @@
 
 #include <CL/cl.hpp>
 
-#include "common.cpph"
+#include "common.hpp"
 
 using namespace std;
 

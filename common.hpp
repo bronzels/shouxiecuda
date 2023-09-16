@@ -35,7 +35,7 @@ void add_bias_(std::vector<T> &v, const T &a);
                                     __FILE__, __LINE__ ); \
                             exit( EXIT_FAILURE );}}
 enum INIT_PARAM{
-	INIT_ZERO,INIT_RANDOM,INIT_ONE,INIT_ONE_TO_TEN,INIT_FOR_SPARSE_METRICS,INIT_0_TO_X
+	INIT_ZERO,INIT_RANDOM,INIT_ONE,INIT_ONE_TO_TEN,INIT_FOR_SPARSE_METRICS,INIT_0_TO_X,INIT_RANDOM_KEY
 };
 
 //simple initialization

@@ -11,7 +11,7 @@
 #include <thrust/sort.h>
 #include <thrust/copy.h>
 
-#include "common.cpph"
+#include "common.hpp"
 #include "cuda_common.cuh"
 
 #include "helper_cuda.h"

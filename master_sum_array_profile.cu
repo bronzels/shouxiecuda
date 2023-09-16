@@ -7,7 +7,7 @@
 #include "device_launch_parameters.h"
 
 #include "cuda_common.cuh"
-#include "common.cpph"
+#include "common.hpp"
 
 //assume grid is 1D and block is 1D then nx = size
 __global__ void sum_arrays_1Dgrid_1Dblock(float* a, float* b, float *c, int nx)
@@ -86,7 +86,7 @@ void run_sum_array_1d(int argc, char** argv)
     gpuErrchk(cudaDeviceSynchronize());
     gpuErrchk(cudaMemcpy(h_ref,d_c,byte_size,cudaMemcpyDeviceToHost));
 
-    compare_arrays(h_out, h_ref, size, 1e-4);
+    compare_arrays(h_out, h_ref, size, (float)1e-4);
 
     cudaFree(d_c);
     cudaFree(d_b);
@@ -174,7 +174,7 @@ void run_sum_array_2d(int argc, char** argv)
 
     gpuErrchk(cudaMemcpy(h_ref, d_c, byte_size, cudaMemcpyDeviceToHost));
 
-    compare_arrays(h_out, h_ref, size, 1e-4);
+    compare_arrays(h_out, h_ref, size, (float)1e-4);
 
     cudaFree(d_c);
     cudaFree(d_b);

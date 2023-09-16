@@ -1,4 +1,4 @@
-#include "common.cpph"
+#include "common.hpp"
 using namespace std;
 
 #include <iterator>
@@ -262,6 +262,22 @@ void initialize(int * input, const unsigned int array_size,
 			input[i] = (int)(rand() & 0xFF);
 		}
 	}
+    else if (PARAM == INIT_RANDOM_KEY)
+    {
+        for(int i = 0; i < array_size; i++)
+        {
+            input[i] = i;//定义一个从0到n-1不重复的数组
+        }
+        srand(time(0));//随机数种子以从1970年1月1日00:00:00到现在的秒数为种子
+        for(int i = 0; i < array_size; i++) {
+            int j = rand() % array_size;//使j随机取0到n-1的数
+            int temp = input[i];//用temp存储第i个数
+            input[i] = input[j];//将第j个数的数值赋值给第i个数
+            input[j] = temp;//将原先第i个数的数值赋值给第j个数
+            //这一系列操作其实就是将0到n-1中的两个数互换位置，依旧保持不重复的数值
+        }
+    }
+
 }
 
 void initialize(float * input, const unsigned int array_size,

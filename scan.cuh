@@ -14,7 +14,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/execution_policy.h>
 
-#include "common.cpph"
+#include "common.hpp"
 #include "cuda_common.cuh"
 
 void scan_inclusive_cpu(float*, float*, int);

@@ -22,7 +22,7 @@ list(APPEND CUDA_NVCC_FLAGS -G -g --extended-lambda -gencode arch=compute_86,cod
 set(CUDA_SEPARABLE_COMPILATION ON)
 #add_definitions(-DUSE_GPU)
 #set(LDFLAGS "$LDFLAGS -lcudadevrt")
-file(GLOB COMMON common.cpph common.cpp)
+file(GLOB COMMON common.hpp common.cpp)
 #link_directories(${CUDA_LIBRARIES})
 message("CUDA_TOOLKIT_ROOT_DIR = ${CUDA_TOOLKIT_ROOT_DIR}")
 message("CUDA_INCLUDE_DIRS = ${CUDA_INCLUDE_DIRS}")
@@ -82,6 +82,7 @@ cuda_add_executable(misc_opencl_device common.cpp cuda_common.cu misc_opencl_dev
 cuda_add_executable(misc_opencl_sum_array_c common.c misc_opencl_sum_array.c)
 cuda_add_executable(misc_opencl_sum_array_cpp common.cpp misc_opencl_sum_array.cpp)
 cuda_add_executable(misc_opencl_matmul common.cpp misc_opencl_matmul.cpp)
+cuda_add_executable(misc_cub_radixsort common.cpp misc_cub_radixsort.cu)
 
 cuda_add_executable(tiandiao_vecadd tiandiao_vecadd.cu)
 cuda_add_executable(tiandiao_stencil tiandiao_stencil.cu)

@@ -5,7 +5,7 @@
 #include <thrust/execution_policy.h>
 #include <iostream>
 
-#include "common.cpph"
+#include "common.hpp"
 #include "dotmethod.h"
 
 struct myFunctor

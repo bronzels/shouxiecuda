@@ -8,7 +8,7 @@
 #include "cblas.h"
 
 #include "cuda_common.cuh"
-#include "common.cpph"
+#include "common.hpp"
 
 using namespace std;
 
