@@ -415,11 +415,13 @@ __global__ void redunction_complete_unrolling_pairs_smem_warpshfl_template(int *
 6(only in below 64)     2.908512
 6                       2.856544/2.859680/2.861440
 7                       2.955232/2.958560/2.955328
-8                       2.294112
+8(atomic)               0.092768    (1<<20, 3.2: 0.147712)
 8(+h_ref cudamemcpy)    2.322592
-9                       13.613408
-thrust                  0.99
-thrust*2                1.17
+9(cub replace atomic)   0.140224    (1<<20, 3.2: 0.147712)
+thrust                  0.6         (1<<20, 3.2: 0.147712)
+thrust(only kernel)     0.01         (1<<20, 3.2: 0.147712)
+cub                     0.59        (1<<20, 3.2: 0.147712)
+cub(only kernel)        0.01        (1<<20, 3.2: 0.147712)
 
     same wt/wn 2 __syncthreads
     same to include h_ref cudamemcpy or not
@@ -495,15 +497,44 @@ __global__ void redunction_atomic_add_cub(int * input,
 void thrust_reduction(int *h_input, int size, int result)
 {
     clock_t time1,time2;
-    time1 = clock();
     int * dptr_in;
     checkCudaErrors(cudaMalloc((void **)&dptr_in, size * sizeof(int)));
     cudaMemcpy(dptr_in, h_input, size * sizeof(int), cudaMemcpyHostToDevice);
     thrust::device_ptr<int> dptr_thr_in = thrust::device_pointer_cast(dptr_in);
+    time1 = clock();
     int thrust_value = thrust::reduce(dptr_thr_in, dptr_thr_in + size, (int)0, thrust::plus<int>());
     time2 = clock();
     std::cout<<"time spent executing by the thrust_reduction: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
     compare_results(thrust_value, result);
+
+}
+
+void cub_reduction(int *h_input, int size, int result)
+{
+    clock_t time1,time2;
+    int * d_input;
+    int byte_size = size * sizeof(int);
+    checkCudaErrors(cudaMalloc((void **)&d_input, byte_size));
+    cudaMemcpy(d_input, h_input, byte_size, cudaMemcpyHostToDevice);
+    int * d_output;
+    checkCudaErrors(cudaMalloc((void **)&d_output, byte_size));
+    void *dev_temp_storage = NULL;
+    size_t temp_storage_bytes = 0;
+    time1 = clock();
+    cub::DeviceReduce::Sum(dev_temp_storage, temp_storage_bytes, d_input, d_output, size);
+    //cub::DeviceReduce::Reduce(dev_temp_storage, temp_storage_bytes, d_input, d_input, size, cub::Sum(), 0);
+    checkCudaErrors(cudaMalloc((void **)&dev_temp_storage, temp_storage_bytes));
+    cub::DeviceReduce::Sum(dev_temp_storage, temp_storage_bytes, d_input, d_output, size);
+    //cub::DeviceReduce::Reduce(dev_temp_storage, temp_storage_bytes, d_input, d_input, size, cub::Sum(), 0);
+    cudaDeviceSynchronize();
+    time2 = clock();
+    cudaMemcpy(h_input, d_output, byte_size, cudaMemcpyDeviceToHost);
+    int cub_value = h_input[0];
+    cudaFree(d_input);
+    cudaFree(d_output);
+    cudaFree(dev_temp_storage);
+    std::cout<<"time spent executing by the cub_reduction: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
+    compare_results(cub_value, result);
 
 }
 
@@ -526,7 +557,7 @@ int main(int argc, char** argv)
     int method = 0;
     if (argc > 1)
         method = atoi(argv[1]);
-    method = 8;
+    method = 9;
     printf("method:%d\n", method);
     int block_size = BDIM;
     /*
@@ -538,8 +569,8 @@ int main(int argc, char** argv)
     if (argc > 3 && method == 3)
         rollingfactor = atoi(argv[3]);
 
-    int size = 1 << 29;
-    //int size = 1 << 20;
+    //int size = 1 << 29;
+    int size = 1 << 20;
     printf("size:%d\n", size);
     int byte_size = size * sizeof(int);
 
@@ -565,7 +596,8 @@ int main(int argc, char** argv)
     int cpu_result = reduction_cpu(h_input, size);
 
     thrust_reduction(h_input, size, cpu_result);
-    return 0;
+    //cub_reduction(h_input, size, cpu_result);
+    //return 0;
 
     dim3 block(block_size);
     dim3 grid(gridsize);

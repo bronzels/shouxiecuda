@@ -390,8 +390,6 @@ int async(int argc, char** argv)
     printf("time spent executing by the GPU: %.6f\n", gpu_time);
 
     cudaDeviceSynchronize();
-    time2 = clock();
-    printf("time spent executing openCL sum_array:%f s\n", (double)(time2-time1)/CLOCKS_PER_SEC);
 
     compare_arrays(h_c, gpu_results, size);
 

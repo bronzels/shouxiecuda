@@ -14,6 +14,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/execution_policy.h>
 
+#include "cub/cub.cuh"
+
 #include "common.hpp"
 #include "cuda_common.cuh"
 

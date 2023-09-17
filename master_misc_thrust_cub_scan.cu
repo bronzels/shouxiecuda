@@ -439,6 +439,7 @@ void exec_kernel_global(dim3 grid, dim3 block, int * h_output, int * h_ref, int 
  *  exec_kernel_global_inclusive(__dev)                         0.029344
  */
 /*
+thrust
 1 << 22
 Kernel execution time using events : 11.396000
 end datasize:4194304, is_inplace:1, is_cpu:1, is_inclusive:1, time:0.04
@@ -449,7 +450,6 @@ end datasize:4194304, is_inplace:0, is_cpu:1, is_inclusive:1, time:0.16
 end datasize:4194304, is_inplace:0, is_cpu:1, is_inclusive:0, time:0.13
 end datasize:4194304, is_inplace:0, is_cpu:0, is_inclusive:1, time:0.07
 end datasize:4194304, is_inplace:0, is_cpu:0, is_inclusive:0, time:0.07
-
 1 << 23
 Kernel execution time using events : 5.745408
 end datasize:8388608, is_inplace:1, is_cpu:1, is_inclusive:1, time:0.08
@@ -460,6 +460,15 @@ end datasize:8388608, is_inplace:0, is_cpu:1, is_inclusive:1, time:0.31
 end datasize:8388608, is_inplace:0, is_cpu:1, is_inclusive:0, time:0.25
 end datasize:8388608, is_inplace:0, is_cpu:0, is_inclusive:1, time:0.13
 end datasize:8388608, is_inplace:0, is_cpu:0, is_inclusive:0, time:0.14
+
+cub
+1 << 22
+end datasize:4194304, is_inclusive:1, time:0.02
+end datasize:4194304, is_inclusive:0, time:0.01
+
+1 << 23
+end datasize:8388608, is_inclusive:1, time:0.05
+end datasize:8388608, is_inclusive:0, time:0.03
 
 */
 void thrust_scan(int *h_input, int *h_output, int size, bool is_inplace, bool is_cpu, bool is_inclusive) {
@@ -517,12 +526,43 @@ void thrust_scan(int *h_input, int *h_output, int size, bool is_inplace, bool is
     std::cout<<"end datasize:"<<size<<", is_inplace:"<<is_inplace<<", is_cpu:"<<is_cpu<<", is_inclusive:"<<is_inclusive<<", time:"<<(double)(time2 - time1) / CLOCKS_PER_SEC<<std::endl;;
 }
 
+template <typename T>
+void cub_scan(T *h_input, T *h_output, int size, bool is_inclusive) {
+    std::cout <<"start datasize:"<<size<<", is_inclusive:"<<is_inclusive<< std::endl;
+    int byte_size = size *sizeof(T);
+    clock_t time1,time2;
+    time1 = clock();
+    T *d_input, *d_output;
+    cudaMalloc(&d_input, byte_size);
+    cudaMalloc(&d_output, byte_size);
+    cudaMemcpy(d_input, h_input, byte_size, cudaMemcpyHostToDevice);
+    void *dev_temp_storage = NULL;
+    size_t temp_storage_bytes = 0;
+    if(is_inclusive) {
+        cub::DeviceScan::InclusiveSum(dev_temp_storage, temp_storage_bytes, d_input, d_output, size);
+        cudaMalloc(&dev_temp_storage, temp_storage_bytes);
+        cub::DeviceScan::InclusiveSum(dev_temp_storage, temp_storage_bytes, d_input, d_output, size);
+    }
+    else {
+        cub::DeviceScan::ExclusiveSum(dev_temp_storage, temp_storage_bytes, d_input, d_output, size);
+        cudaMalloc(&dev_temp_storage, temp_storage_bytes);
+        cub::DeviceScan::ExclusiveSum(dev_temp_storage, temp_storage_bytes, d_input, d_output, size);
+    }
+    cudaFree(dev_temp_storage);
+    cudaFree(d_input);
+    cudaMemcpy(h_output, d_output, byte_size, cudaMemcpyDeviceToHost);
+    time2 = clock();
+    std::cout<<"end datasize:"<<size<<", is_inclusive:"<<is_inclusive<<", time:"<<(double)(time2 - time1) / CLOCKS_PER_SEC<<std::endl;;
+}
+template
+void cub_scan(int *h_input, int *h_output, int size, bool is_inclusive);
+
 int main(int argc, char**argv)
 {
 	printf("Scan algorithm execution starterd \n");
 
 	//int input_size = 1 << 10;//BLOCK_SIZE;//32;
-    int input_size = 1 << 23;
+    int input_size = 1 << 22;
 
 	if (argc > 1)
 	{
@@ -564,31 +604,40 @@ int main(int argc, char**argv)
     //exec_kernel_block(grid, block, h_ref, d_input, input_size, byte_size);
     exec_kernel_global(grid, block, h_output, h_ref, d_input, input_size, byte_size);
 
-	compare_arrays(h_ref, h_output, input_size);
+	compare_arrays(h_ref, h_output_inclusive, input_size);
 
     int *h_input_yat = (int *)malloc(byte_size);
-    int *h_thrust_output = (int *)malloc(byte_size);
-    memcpy(h_input_yat, h_input, byte_size);
-    thrust_scan(h_input_yat, h_thrust_output, input_size, true, true, true);
-    compare_arrays(h_input_yat, h_output_inclusive, input_size);
-    memcpy(h_input_yat, h_input, byte_size);
-    thrust_scan(h_input_yat, h_thrust_output, input_size, true, true, false);
-    compare_arrays(h_input_yat, h_output_exclusive, input_size);
-    memcpy(h_input_yat, h_input, byte_size);
-    thrust_scan(h_input_yat, h_thrust_output, input_size, true, false, true);
-    compare_arrays(h_input_yat, h_output_inclusive, input_size);
-    memcpy(h_input_yat, h_input, byte_size);
-    thrust_scan(h_input_yat, h_thrust_output, input_size, true, false, false);
-    compare_arrays(h_input_yat, h_output_exclusive, input_size);
+    int *h_lib_output = (int *)malloc(byte_size);
+    int lib = 1;
+    if(lib == 0) {
+        memcpy(h_input_yat, h_input, byte_size);
+        thrust_scan(h_input_yat, h_lib_output, input_size, true, true, true);
+        compare_arrays(h_input_yat, h_output_inclusive, input_size);
+        memcpy(h_input_yat, h_input, byte_size);
+        thrust_scan(h_input_yat, h_lib_output, input_size, true, true, false);
+        compare_arrays(h_input_yat, h_output_exclusive, input_size);
+        memcpy(h_input_yat, h_input, byte_size);
+        thrust_scan(h_input_yat, h_lib_output, input_size, true, false, true);
+        compare_arrays(h_input_yat, h_output_inclusive, input_size);
+        memcpy(h_input_yat, h_input, byte_size);
+        thrust_scan(h_input_yat, h_lib_output, input_size, true, false, false);
+        compare_arrays(h_input_yat, h_output_exclusive, input_size);
 
-    thrust_scan(h_input, h_thrust_output, input_size, false, true, true);
-    compare_arrays(h_thrust_output, h_output_inclusive, input_size);
-    thrust_scan(h_input, h_thrust_output, input_size, false, true, false);
-    compare_arrays(h_thrust_output, h_output_exclusive, input_size);
-    thrust_scan(h_input, h_thrust_output, input_size, false, false, true);
-    compare_arrays(h_thrust_output, h_output_inclusive, input_size);
-    thrust_scan(h_input, h_thrust_output, input_size, false, false, false);
-    compare_arrays(h_thrust_output, h_output_exclusive, input_size);
+        thrust_scan(h_input, h_lib_output, input_size, false, true, true);
+        compare_arrays(h_lib_output, h_output_inclusive, input_size);
+        thrust_scan(h_input, h_lib_output, input_size, false, true, false);
+        compare_arrays(h_lib_output, h_output_exclusive, input_size);
+        thrust_scan(h_input, h_lib_output, input_size, false, false, true);
+        compare_arrays(h_lib_output, h_output_inclusive, input_size);
+        thrust_scan(h_input, h_lib_output, input_size, false, false, false);
+        compare_arrays(h_lib_output, h_output_exclusive, input_size);
+    }
+    else {
+        cub_scan(h_input, h_lib_output, input_size, true);
+        compare_arrays(h_lib_output, h_output_inclusive, input_size);
+        cub_scan(h_input, h_lib_output, input_size, false);
+        compare_arrays(h_lib_output, h_output_exclusive, input_size);
+    }
 
     free(h_input);
     free(h_output);
@@ -598,8 +647,8 @@ int main(int argc, char**argv)
 
     std::cout << "free h_input_yat" << std::endl;
     free(h_input_yat);
-    std::cout << "free h_thrust_output" << std::endl;
-    free(h_thrust_output);
+    std::cout << "free h_lib_output" << std::endl;
+    free(h_lib_output);
 
 //！！！没有这回事，不管是host/device的数据指针，如果被用作thrust::host_vector/thrust::device_vector形如 thrust::host_vector(ptr, ptr+1)的初始化,
 //就会被vector的析构释放，同时如果再被free/cudaFree就会出现重复释放的问题。free会打印整个对战，cudaFree会简单illegal mem错误。
