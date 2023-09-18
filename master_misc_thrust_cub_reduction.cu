@@ -3,7 +3,11 @@
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+
 #include "cub/cub.cuh"
+#include <cub/block/block_load.cuh>
+#include <cub/block/block_store.cuh>
+#include <cub/block/block_reduce.cuh>
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
@@ -22,7 +26,8 @@
 #include <time.h>
 using namespace std;
 
-#define BDIM 128
+#define BDIM 512
+#define TDIM 32
 #define FULL_MASK 0xffffffff
 
 /*
@@ -417,11 +422,16 @@ __global__ void redunction_complete_unrolling_pairs_smem_warpshfl_template(int *
 7                       2.955232/2.958560/2.955328
 8(atomic)               0.092768    (1<<20, 3.2: 0.147712)
 8(+h_ref cudamemcpy)    2.322592
-9(cub replace atomic)   0.140224    (1<<20, 3.2: 0.147712)
 thrust                  0.6         (1<<20, 3.2: 0.147712)
 thrust(only kernel)     0.01         (1<<20, 3.2: 0.147712)
 cub                     0.59        (1<<20, 3.2: 0.147712)
 cub(only kernel)        0.01        (1<<20, 3.2: 0.147712)
+
+
+BDIM:512, TDIM:32
+8(atomic)                                                                               0.056832    (1<<20, 3.2: 0.147712)
+9(cub replace atomic，最后atomic会造成函数不能进入，只能退回cpu侧per block相加)                 0.333056    (1<<20, 3.2: 0.147712)
+10(cub load replace forloop)                                                            总是0        (1<<20, 3.2: 0.147712)
 
     same wt/wn 2 __syncthreads
     same to include h_ref cudamemcpy or not
@@ -449,49 +459,71 @@ __global__ void redunction_atomic_add(int * input,
 {
     int pos_start = blockIdx.x * blockDim.x + threadIdx.x;
     int pos_step = blockDim.x * gridDim.x;
-
     int thread_sum = 0;
-
     for(int i = pos_start; i < size; i = i + pos_step)
     {
         thread_sum += input[i];
     }
-
     __syncthreads();
-
     __shared__ int block_sum;
     block_sum = 0;
     atomicAdd(&block_sum, thread_sum);
-
+    //printf("pos_start:%d, block_sum:%d\n", pos_start, block_sum);
     if(threadIdx.x == 0) {
         atomicAdd(temp, block_sum);
     }
 }
 
-__global__ void redunction_atomic_add_cub(int * input,
+__global__ void redunction_atomic_add_cub_for(int * input,
                                       int * temp, int size)
 {
     int pos_start = blockIdx.x * blockDim.x + threadIdx.x;
     int pos_step = blockDim.x * gridDim.x;
-
     int thread_sum = 0;
-
     for(int i = pos_start; i < size; i = i + pos_step)
     {
         thread_sum += input[i];
     }
-
-    //__syncthreads();
-
+    __syncthreads();
+    //printf("pos_start:%d, thread_sum:%d\n", pos_start, thread_sum);
     typedef cub::BlockReduce<int, BDIM> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
-    int block_sum = BlockReduce(temp_storage).Sum(thread_sum);
+    //int block_sum = BlockReduce(temp_storage).Sum(thread_sum);
+    temp[blockIdx.x] = BlockReduce(temp_storage).Sum(thread_sum);
+    /*
+    //printf("pos_start:%d, block_sum:%d\n", pos_start, block_sum);
 
-    //__syncthreads();
+    if(threadIdx.x == 0) {
+        //atomicAdd(temp, block_sum);
+    }
+    */
+}
+/*
+int block_sum = BlockReduce(temp_storage).Sum(thread_sum);这句后面，加这3种处理，都会导致函数完全不会被调用：
+1，atomicAdd
+2，__syncthreads
+3, printf打印
+也就是用cub情况下，不能一次把求和做完，只能把按block求和的结果，copy回cpu，在cpu测加完。
+*/
 
+template <int BLOCK_THREADS, int ITEMS_PER_THREAD, cub::BlockReduceAlgorithm ALGORITHM>
+__global__ void redunction_atomic_add_cub_load(int * input,
+                                      int * temp)
+{
+    printf("blockIdx.x:%d, threadIdx.x:%d\n", blockIdx.x, threadIdx.x);
+    //int block_offset = blockIdx.x * (BLOCK_THREADS * ITEMS_PER_THREAD);
+    typedef cub::BlockReduce<int, BLOCK_THREADS, ALGORITHM> BlockReduceT;
+    __shared__ typename BlockReduceT::TempStorage temp_storage;
+    int data[ITEMS_PER_THREAD];
+    cub::LoadDirectStriped<BLOCK_THREADS>(threadIdx.x, input, data);
+    //int block_sum = BlockReduceT(temp_storage).Sum(data);
+    temp[blockIdx.x] = BlockReduceT(temp_storage).Sum(data);
+
+    /*
     if(threadIdx.x == 0) {
         atomicAdd(temp, block_sum);
     }
+    */
 }
 
 void thrust_reduction(int *h_input, int size, int result)
@@ -552,12 +584,13 @@ int main(int argc, char** argv)
      * 6-compleserolling_smem
      * 7-compleserolling_smem_warpshfl
      * 8-atomic_add_wn_cpureduc
-     * 9-atomic_add_wn_cpureduc_cub
+     * 9-atomic_add_wn_cpureduc_cub_for
+     * 10-atomic_add_wn_cpureduc_cub_load
     */
     int method = 0;
     if (argc > 1)
         method = atoi(argv[1]);
-    method = 9;
+    method = 10;
     printf("method:%d\n", method);
     int block_size = BDIM;
     /*
@@ -575,10 +608,13 @@ int main(int argc, char** argv)
     int byte_size = size * sizeof(int);
 
     int gridsize = 0;
+    int items_per_thread = 1;
     if(method == 3)
         gridsize = (size/block_size)/rollingfactor;
-    else if(method == 8 || method == 9)
-        gridsize = size/block_size/128;
+    else if(method == 8 || method == 9) {
+        items_per_thread = TDIM;
+        gridsize = size/block_size/items_per_thread;
+    }
     else
         gridsize = size/block_size;
 
@@ -595,7 +631,7 @@ int main(int argc, char** argv)
 
     int cpu_result = reduction_cpu(h_input, size);
 
-    thrust_reduction(h_input, size, cpu_result);
+    //thrust_reduction(h_input, size, cpu_result);
     //cub_reduction(h_input, size, cpu_result);
     //return 0;
 
@@ -714,8 +750,12 @@ int main(int argc, char** argv)
             redunction_atomic_add <<< grid, block >>>(d_input, d_temp, size);
             break;
         case 9:
-            kernelname="redunction_atomic_add_cub\n";
-            redunction_atomic_add_cub <<< grid, block >>>(d_input, d_temp, size);
+            kernelname="redunction_atomic_add_cub_for\n";
+            redunction_atomic_add_cub_for <<< grid, block >>>(d_input, d_temp, size);
+            break;
+        case 10:
+            kernelname="redunction_atomic_add_cub_load\n";
+            redunction_atomic_add_cub_load<BDIM, TDIM, cub::BLOCK_REDUCE_RAKING> <<< grid, block >>>(d_input, d_temp);
             break;
         default:
             kernelname="redunction_powed_pairs\n";
@@ -737,7 +777,8 @@ int main(int argc, char** argv)
     printf("time spent by CPU in CUDA calls: %.6f\n", sdkGetTimerValue(&timer));
     printf("CPU executed %lu iterations while waiting for GPU to finish\n", counter);
 
-    if (method != 8 && method != 9)
+    //if (method != 8 && method != 9 && method != 10)
+    if (method != 8)
     {
         checkCudaErrors(cudaMemcpy(h_ref, d_temp, temp_array_byte_size,
                                    cudaMemcpyDeviceToHost));
@@ -749,7 +790,8 @@ int main(int argc, char** argv)
     }
 
     int gpu_result = 0;
-    if (method != 8 && method != 9)
+    //if (method != 8 && method != 9 && method != 10)
+    if (method != 8)
     {
         for ( int i = 0; i < grid.x; i ++)
         {
