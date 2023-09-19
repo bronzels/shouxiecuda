@@ -21,6 +21,8 @@
 #include <iostream>
 #include <assert.h>
 
+#define vectorPtr(x) thrust::raw_pointer_cast(x.data())
+
 void ShowCudaGpuInfo();
 
 template <class T>

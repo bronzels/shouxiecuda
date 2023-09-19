@@ -74,7 +74,7 @@ cuda_add_executable(master_atomic master_atomic.cu)
 cuda_add_executable(master_misc_thrust_cub_reduction common.cpp master_misc_thrust_cub_reduction.cu)
 cuda_add_executable(master_misc_thrust_cub_scan common.cpp master_misc_thrust_cub_scan.cu)
 
-cuda_add_executable(misc_matmul common.cpp cuda_common.cu misc_matmul.cu)
+cuda_add_executable(misc_cublas_thrust_mma_matmul common.cpp cuda_common.cu misc_cublas_thrust_wmma_matmul.cu)
 cuda_add_executable(misc_thrust_sort_max common.cpp misc_thrust_sort_max.cu)
 cuda_add_executable(misc_thrust_foreach common.cpp dotmethod.cpp misc_thrust_foreach.cu)
 cuda_add_executable(misc_thrust_transforms common.cpp misc_thrust_transforms.cu)

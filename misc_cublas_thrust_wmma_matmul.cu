@@ -5,6 +5,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "cublas_v2.h"
+
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/transform.h>
@@ -14,6 +15,11 @@
 #include <thrust/fill.h>
 #include <thrust/replace.h>
 #include <thrust/functional.h>
+#ifndef __CUDACC__
+#define __CUDACC__
+#endif
+#include <mma.h>
+
 #include "common.hpp"
 
 #include "helper_cuda.h"
@@ -69,8 +75,7 @@ void tranpose_matrix(T * input, T * output, int m, int n)
     }
 }
 
-template <class T>
-void matmul_cpu_blas(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k) {
+void matmul_cpu_blas(float * mat_a, float * mat_b, float * mat_out, int m, int n, int k) {
     //cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, n, k, 1.0, mat_a, k, mat_b, k, 0.0, mat_out, n);
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, mat_a, k, mat_b, n, 0.0, mat_out, n);
 }
@@ -122,35 +127,67 @@ struct Dp{
 };
 template struct Dp<float>;
 
-template <class T>
-void matmul_thrust_transform_struct(T * mat_a, T * mat_b, T * mat_out, int m, int n, int k) {
-    //thrust::host_vector<T> v_a_h(mat_a, mat_a + m * n);
-    //thrust::host_vector<T> v_b_h(mat_b, mat_b + k * n);
-    thrust::device_vector<T> v_a_d(mat_a, mat_a + m * n);
-    //v_a_d = v_a_h;
-    thrust::device_vector<T> v_b_d(mat_b, mat_b + k * n);
-    //v_b_d = v_b_h;
-    thrust::device_vector<T> v_out_d(m * n, 0);
+# define WARP_SIZE  32
+# define coreSizeM 16
+# define coreSizeN 16
+# define coreSizeK 16
+/*
+数据量在1k级别计算1e-1正确, *8以后误差太大
+ */
+#define uint unsigned int
+__global__ void TensorCoreMM(half* a, half* b, float* c,
+                             const int lm, const int ln, const int lk)
+{
+    const uint x = (blockDim.x * blockIdx.x + threadIdx.x) / WARP_SIZE;
+    const uint y = blockDim.y * blockIdx.y + threadIdx.y;
 
-    thrust::device_vector<T> v_b_d_trans(k * n);
-    //thrust_transpose(v_b_d, v_b_d_trans, k, n);
-    //trans     1.1     diff
-    //notrans   0.25    same
+    const uint la = lk, lb = ln, lc = ln;
 
-    std::cout<<"start executing by the GPU thrust_transform_struct"<<std::endl;
-    clock_t time1,time2;
-    time1 = clock();
-    // transform + struct
-    thrust::transform(thrust::counting_iterator<int>(0), thrust::counting_iterator<int>(m*n),
-            v_out_d.begin(),
-            Dp<T>(thrust::raw_pointer_cast(v_a_d.data()), thrust::raw_pointer_cast(v_b_d.data()), m, n, k));
-    time2 = clock();
-    std::cout<<"time spent executing by the GPU thrust_transform_struct: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
-    //thrust::host_vector<T> v_out_h(m * n, 0);
-    //v_out_h = v_out_d;
-    int byte_size = m*n*sizeof(T);
-    cudaMemcpy(mat_out, thrust::raw_pointer_cast(v_out_d.data()), byte_size, cudaMemcpyDeviceToHost);
-    //memcpy(mat_out, v_out_h.data(), byte_size);
+    const uint aRow = x * coreSizeM; // 当前tile左上角在A上的行数
+    const uint bCol = y * coreSizeN; // 当前tile左上角在B上的列数
+
+    if (aRow >= lm || bCol >= ln) return;
+
+// 声明fragment
+    nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, coreSizeM, coreSizeN, coreSizeK, half, nvcuda::wmma::row_major> a_frag;
+    nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, coreSizeM, coreSizeN, coreSizeK, half, nvcuda::wmma::row_major> b_frag;
+    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, coreSizeM, coreSizeN, coreSizeK, float> c_frag;
+
+// 清理c_frag
+    nvcuda::wmma::fill_fragment(c_frag, 0.f);
+    for (int i = 0; i < la; i += coreSizeK)
+    {
+        const uint aCol = i;
+        const uint bRow = i;
+        //if(aRow < lm && aCol < lk && bRow < lk && bCol < ln) {
+// load
+            nvcuda::wmma::load_matrix_sync(a_frag, a + aCol + aRow * la, la);
+            nvcuda::wmma::load_matrix_sync(b_frag, b + bCol + bRow * lb, lb);
+// multiple and accumulate
+            nvcuda::wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+        //}
+    }
+// store
+    nvcuda::wmma::store_matrix_sync(c + bCol + aRow * lc, c_frag, lc, nvcuda::wmma::mem_row_major);
+
+//*
+// 清理c_frag
+    nvcuda::wmma::fill_fragment(c_frag, 0.f);
+    for (int i = 0; i < la; i += coreSizeK)
+    {
+        const uint aCol = i;
+        const uint bRow = i;
+        //if(aRow < lm && aCol < lk && bRow < lk && bCol < ln) {
+// load
+            nvcuda::wmma::load_matrix_sync(a_frag, a + aCol + aRow * la + lm * lk / 2, la);
+            nvcuda::wmma::load_matrix_sync(b_frag, b + bCol + bRow * lb, lb);
+// multiple and accumulate
+            nvcuda::wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+        //}
+    }
+// store
+    nvcuda::wmma::store_matrix_sync(c + bCol + aRow * lc + lm * ln / 2, c_frag, lc, nvcuda::wmma::mem_row_major);
+//*/
 }
 
 template <class T>
@@ -233,22 +270,12 @@ __global__ void matmul_smem_pad(
 }
 
 
-
-
-
-
-
-
-
-
 int main(int argc, char** argv)
 {
 	//default values for variabless
 	int m = M;
     int k = K;
 	int n = N;
-	int block_x = BDIM;
-	int block_y = BDIM;
 
     int size_a = m * k;
     int size_b = k * n;
@@ -257,12 +284,9 @@ int main(int argc, char** argv)
     int byte_size_a = sizeof(float) * size_a;
     int byte_size_b = sizeof(float) * size_b;
 
-	printf("Matmul for (%d X % d) and (%d X % d) matrix with block size %d X %d \n",m,k,k,n,block_x,block_y);
-
     float * h_mat_array_a = (float*)malloc(byte_size_a);
     float * h_mat_array_b = (float*)malloc(byte_size_b);
     float * h_mat_array_mul = (float*)malloc(byte_size);
-    float * h_ref = (float*)malloc(byte_size);
 
 	//initialize matrix with integers between one and ten
     initialize(h_mat_array_a,size_a ,INIT_RANDOM);
@@ -294,8 +318,10 @@ int main(int argc, char** argv)
     //compare_matrixes(h_mat_array_out, h_mat_array_mul, m, n);
     if ( print_a)
     {
-        print_matrix(h_mat_array_out, 2, 10);
-        print_matrix(h_mat_array_out + (m - 2) * n, 2, 10);
+        print_matrix(h_mat_array_out, 1, 10);
+        print_matrix(h_mat_array_out + m * n / 2 - 10, 1, 10);
+        print_matrix(h_mat_array_out + m * n / 2 + 10, 1, 10);
+        print_matrix(h_mat_array_out + m * n - 10, 1, 10);
     }
     //return 0;
 
@@ -309,15 +335,13 @@ int main(int argc, char** argv)
 	cudaMemcpy(d_mat_array_a, h_mat_array_a, byte_size_a, cudaMemcpyHostToDevice);
     cudaMemcpy(d_mat_array_b, h_mat_array_b, byte_size_b, cudaMemcpyHostToDevice);
 
-	dim3 blocks(block_x, block_y);
-	dim3 grid(m/block_x, n/block_y);
-
     void(*kernel)(float*, float*, float*, int, int, int);
 	char * kernel_name;
 
     float * h_ref_prev = (float*)malloc(byte_size);
     memset((void *)h_ref_prev, 0, byte_size);
-    for (int kernel_num = 3; kernel_num < 4; kernel_num ++)
+    int kernel_num = 2;
+    //for (int kernel_num = 5; kernel_num < 6; kernel_num ++)
     {
         switch (kernel_num)
         {
@@ -336,7 +360,27 @@ int main(int argc, char** argv)
             case 3:
                 kernel_name = "GPU(cuBLAS)";
                 break;
+            case 4:
+                kernel_name = "GPU(thrust)";
+                break;
+            case 5:
+                kernel_name = "GPU(mma)";
+                break;
         }
+        int block_x, block_y;
+        if(kernel_num != 5) {
+            //for all except wmma
+            block_x = BDIM;
+            block_y = BDIM;
+        }
+        else {
+            //only for wmma
+            block_x = 128;//4*warpsize
+            block_y = 4;//4
+        }
+        printf("Matmul for (%d X % d) and (%d X % d) matrix with block size %d X %d \n",m,k,k,n,block_x,block_y);
+        dim3 block(block_x, block_y);
+        dim3 grid(m/block_x, kernel_num != 5 ? n/block_y : n/block_y/coreSizeN);
 
         printf("Start processing in %s\n", kernel_name);
 
@@ -346,12 +390,16 @@ int main(int argc, char** argv)
         float time = 0.0;
         cudaEventCreate(&start);
         cudaEventCreate(&end);
-        if (kernel_num != 3)
+        if (kernel_num != 3 && kernel_num != 4 && kernel_num != 5)
         {
             cudaEventRecord(start);
-            kernel <<< grid, blocks>>> (d_mat_array_a, d_mat_array_b, d_mat_array_mul, m, n, k);
+            kernel <<< grid, block>>> (d_mat_array_a, d_mat_array_b, d_mat_array_mul, m, n, k);
+            cudaEventRecord(end);
+            cudaEventSynchronize(end);
+            cudaDeviceSynchronize();
+            cudaMemcpy(h_mat_array_mul, d_mat_array_mul, byte_size, cudaMemcpyDeviceToHost);
         }
-        else
+        else if (kernel_num == 3)
         {
             cublasHandle_t handle;
             cublasStatus_t status = cublasCreate(&handle);
@@ -364,40 +412,77 @@ int main(int argc, char** argv)
             float beta = 0.0f;
             cudaEventRecord(start);
             status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha, d_mat_array_b, n, d_mat_array_a, k, &beta, d_mat_array_mul, n);
+            cudaEventRecord(end);
+            cudaEventSynchronize(end);
             if (status != CUBLAS_STATUS_SUCCESS)
             {
                 std::cerr << "!!!! CUBLAS kernel execution error\n";
                 return EXIT_FAILURE;
             }
+            //cudaDeviceSynchronize();
+            cudaMemcpy(h_mat_array_mul, d_mat_array_mul, byte_size, cudaMemcpyDeviceToHost);
         }
-        cudaEventRecord(end);
-        cudaEventSynchronize(end);
+        else if (kernel_num == 4)
+        {
+            //thrust::host_vector<T> v_a_h(mat_a, mat_a + m * n);
+            //thrust::host_vector<T> v_b_h(mat_b, mat_b + k * n);
+            //thrust::device_vector<float> v_a_d(d_mat_array_a, d_mat_array_a + m * n);
+            //v_a_d = v_a_h;
+            //thrust::device_vector<float> v_b_d(d_mat_array_b, d_mat_array_b + k * n);
+            //v_b_d = v_b_h;
+            thrust::device_vector<float> v_out_d(m * n, 0);
+
+            std::cout<<"start executing by the GPU thrust_transform_struct"<<std::endl;
+            //clock_t time1,time2;
+            //time1 = clock();
+            cudaEventRecord(start);
+            // transform + struct
+            thrust::transform(thrust::counting_iterator<int>(0), thrust::counting_iterator<int>(m*n),
+                              v_out_d.begin(),
+                              Dp<float>(d_mat_array_a, d_mat_array_b, m, n, k));
+            cudaEventRecord(end);
+            cudaEventSynchronize(end);
+            //std::cout<<"time spent executing by the GPU thrust_transform_struct: "<<(double)(time2-time1)/CLOCKS_PER_SEC<<std::endl;
+            //thrust::host_vector<T> v_out_h(m * n, 0);
+            //v_out_h = v_out_d;
+            int byte_size = m*n*sizeof(float);
+            //cudaDeviceSynchronize();
+            cudaMemcpy(h_mat_array_mul, vectorPtr(v_out_d), byte_size, cudaMemcpyDeviceToHost);
+            //memcpy(mat_out, v_out_h.data(), byte_size);
+        }
+        else if (kernel_num == 5)
+        {
+            /*
+            thrust::device_vector<float> h_half_a(h_mat_array_a, h_mat_array_a + size);
+            thrust::device_vector<float> h_half_b(h_mat_array_b, h_mat_array_b + size);
+            thrust::device_vector<half> d_half_a = h_half_a;
+            thrust::device_vector<half> d_half_b = h_half_b;
+            */
+            thrust::device_vector<half> d_half_a(h_mat_array_a, h_mat_array_a + size);
+            thrust::device_vector<half> d_half_b(h_mat_array_b, h_mat_array_b + size);
+            cudaEventRecord(start);
+            //dim3 macro_block(block_x/coreSizeM, block_y/coreSizeN);
+            TensorCoreMM<<<grid, block>>>(vectorPtr(d_half_a), vectorPtr(d_half_b), d_mat_array_mul, m, n, k);
+            cudaEventRecord(end);
+            cudaEventSynchronize(end);
+            cudaDeviceSynchronize();
+            cudaMemcpy(h_mat_array_mul, d_mat_array_mul, byte_size, cudaMemcpyDeviceToHost);
+        }
         cudaEventElapsedTime(&time, start, end);
         printf("%s time: %f\n", kernel_name, time/1000);
-
-        cudaDeviceSynchronize();
-
-        //copy the transpose memroy back to cpu
-        memset((void *)h_ref, 0, byte_size);
-        cudaMemcpy(h_ref, d_mat_array_mul, byte_size, cudaMemcpyDeviceToHost);
         if ( print_a)
         {
-            print_matrix(h_ref, 2, 10);
-            print_matrix(h_ref + (m - 2) * n, 2, 10);
+            print_matrix(h_mat_array_mul, 1, 10);
+            print_matrix(h_mat_array_mul + m * n / 2 - 10, 1, 10);
+            print_matrix(h_mat_array_mul + m * n / 2 + 10, 1, 10);
+            print_matrix(h_mat_array_mul + m * n - 10, 1, 10);
         }
 
         //compare the CPU and GPU transpose matrix for validity
         printf("Compare CPU with %s\n", kernel_name);
-        //compare_matrixes(h_ref, h_mat_array_mul, m, n);
-        compare_matrixes(h_ref, h_mat_array_out, m, n, (float)1e-3);
-        /*
-        if( kernel_num != 0)
-        {
-            compare_matrixes(h_ref, h_ref_prev, m, n);
-        }
-        if( kernel_num != 2)
-            memcpy(h_ref_prev, h_ref, byte_size);
-        */
+        compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1e-2);
+        //compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1e-1);
+        //compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1.0);
     }
     /*
     memset(h_mat_array_out, 0, size);
@@ -411,24 +496,15 @@ int main(int argc, char** argv)
     compare_matrixes(h_ref, h_mat_array_out, m, n, (float)1e-3);
     */
 
-    memset(h_ref, 0, byte_size);
-    matmul_thrust_transform_struct(h_mat_array_a,  h_mat_array_b, h_ref, m, n, k);
-    if ( print_a)
-    {
-        print_matrix(h_ref, 2, 10);
-        print_matrix(h_ref + (m - 2) * n, 2, 10);
-    }
-    printf("Compare CPU with matmul_thrust_transform_struct:\n");
-    compare_matrixes(h_ref, h_mat_array_out, m, n, (float)1e-3);
-
     free(h_mat_array_a);
     free(h_mat_array_b);
     free(h_mat_array_mul);
-    free(h_ref);
+
     cudaFree(d_mat_array_a);
     cudaFree(d_mat_array_b);
     cudaFree(d_mat_array_mul);
 	cudaDeviceReset();
+
 	return EXIT_SUCCESS;
 }
 
@@ -480,9 +556,10 @@ python              23.659889698028564      0.24089908599853516     0.2165956497
 c++                 13.920000               0.072272                0.051916                   0.024310                 0.25         0.07
 
 matrixes: 3072*8 * 1024*8 , 1024*8 * 2048*8; block: 32 * 32
-            cpu(python:numpy, c++:openBLAS)       gpu                   gpu_smem              gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy                       thrust       opencl       opencl_smem       opencl_smem_padded
-python      46.0459623336792                      68.0925920009613      88.5304069519043      78.57171964645386                         13.312400390625001      0.5030193328857422
-c++         115.130000(不转置113.600000)           65.640182             74.491241             13.259836                 0.729070                                                           114.42       65.12
+            cpu(python:numpy, c++:openBLAS)       numba-gpu             numba-gpu_smem        numba-gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy                        cuda-python             thrust                    opencl       opencl_smem               wmma
+python      23.06769585609436                     68.0925920009613      88.39668607711792     78.82755780220032                               0.4896623399999953      0.5030193328857422          0.4936636719994567
+c++         115.130000(不转置113.600000)           127.305527            136.070312            168.717697                      0.729070(openblas 1e-1)                                                                     114.42(openblas 1e-1)     65.12        总是0，好像同步不起作用        11.996722(openblas 精度1.0)
+
 
 
                             global精度        smem精度
