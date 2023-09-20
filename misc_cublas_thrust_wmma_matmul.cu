@@ -135,24 +135,18 @@ template struct Dp<float>;
 数据量在1k级别计算1e-1正确, *8以后误差太大
  */
 #define uint unsigned int
-__global__ void TensorCoreMM(half* a, half* b, float* c,
-                             const int lm, const int ln, const int lk)
+__global__ void TensorCoreMM(half* a, half* b, float* c, const int lm, const int ln, const int lk)
 {
     const uint x = (blockDim.x * blockIdx.x + threadIdx.x) / WARP_SIZE;
     const uint y = blockDim.y * blockIdx.y + threadIdx.y;
-
     const uint la = lk, lb = ln, lc = ln;
-
     const uint aRow = x * coreSizeM; // 当前tile左上角在A上的行数
     const uint bCol = y * coreSizeN; // 当前tile左上角在B上的列数
-
     if (aRow >= lm || bCol >= ln) return;
-
 // 声明fragment
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, coreSizeM, coreSizeN, coreSizeK, half, nvcuda::wmma::row_major> a_frag;
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, coreSizeM, coreSizeN, coreSizeK, half, nvcuda::wmma::row_major> b_frag;
     nvcuda::wmma::fragment<nvcuda::wmma::accumulator, coreSizeM, coreSizeN, coreSizeK, float> c_frag;
-
 // 清理c_frag
     nvcuda::wmma::fill_fragment(c_frag, 0.f);
     for (int i = 0; i < la; i += coreSizeK)
@@ -169,7 +163,6 @@ __global__ void TensorCoreMM(half* a, half* b, float* c,
     }
 // store
     nvcuda::wmma::store_matrix_sync(c + bCol + aRow * lc, c_frag, lc, nvcuda::wmma::mem_row_major);
-
 //*
 // 清理c_frag
     nvcuda::wmma::fill_fragment(c_frag, 0.f);

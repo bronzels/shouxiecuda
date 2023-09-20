@@ -103,7 +103,7 @@ int sync(int argc, char** argv)
     }
     clock_t cpu_start, cpu_end;
     //cpu_start = clock();
-    sum_arry_cpu(h_a, h_b, h_c, size);
+    sum_array_cpu(h_a, h_b, h_c, size);
     //cpu_end = clock();
 
     //device
@@ -331,7 +331,7 @@ int async(int argc, char** argv)
         h_b[i] = (int)(rand() & 0xFF);
     }
     clock_t cpu_start, cpu_end;
-    sum_arry_cpu(h_a, h_b, h_c, size);
+    sum_array_cpu(h_a, h_b, h_c, size);
 
     //device
     int *d_a, *d_b, *d_c;
