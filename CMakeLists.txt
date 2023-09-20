@@ -103,7 +103,7 @@ cuda_add_executable(misc_cub_radixsort common.cpp misc_cub_radixsort.cu)
 cuda_add_executable(misc_cub_thrust_radixsort_many_arrays common.cpp misc_cub_thrust_radixsort_many_arrays.cu)
 cuda_add_executable(misc_sum_matrix_pitched_23d common.cpp misc_sum_matrix_pitched_23d.cu)
 
-cuda_add_executable(pritam pritam.c)
+cuda_add_executable(test_simd test_simd.c)
 
 cuda_add_executable(tiandiao_vecadd tiandiao_vecadd.cu)
 cuda_add_executable(tiandiao_stencil tiandiao_stencil.cu)
