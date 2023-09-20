@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <ctime>
 #include <random>
+
+#include <immintrin.h>
+
 using namespace std;
 
 template <typename T>
@@ -217,8 +220,8 @@ d- Depth in elements
     cudaFreeHost(h_c);
 }
 
-#define W 1920*16
-#define H 1080*16
+#define W 1920*8
+#define H 1080*8
 #define D 3*2
 
 template <typename T>
@@ -232,31 +235,29 @@ int exec(int argc, char** argv) {
     bool print_a = true;
 
     size_t NO_BYTES = size * sizeof(T);
-    size_t total_in_sizeG = (NO_BYTES * 4) >> 30;
+    size_t total_in_sizeG_cpu = (NO_BYTES * 4) >> 30;
+    size_t total_in_sizeG_gpu = (NO_BYTES * 3) >> 30;
     //size_t转double运行时illegal instruction
-    printf("Sum array dimension:(%d X %d X %d), size:%zu, bytes:%zu, bytes total:%zu G\n",w,h,d,size,NO_BYTES,total_in_sizeG);
+    printf("Sum array dimension:(%d X %d X %d), size:%zu, bytes:%zu, bytes total in cpu:%zu G, bytes total in gpu:%zu G\n",w,h,d,size,NO_BYTES,total_in_sizeG_cpu,total_in_sizeG_gpu);
 
     //host pointers
     T *h_a, *h_b, *h_cpu_results, *h_c;
 
-/*                      cpu            avx2          avx2(32align=64)    avx512          avx512(128align)    openmp(for)    avx2+openmp(for)                                                      openmp(parallel+for)    avx2+openmp(paralle+for)  avx2+openmp(paralle+for+schedule)
-*16*16*2/47G,int        4.28(4.25)     2.70(2.70)    2.72                                                    3.93(3.93)      2.72(2.69)                                                           23.860000               23.87                     64.28
-                                                                                                             nowait,2.68(2.700000)
-向量加复杂化(int)         15.40                                                                                 parallel+for=15.34,for=39.510000
-*16*16*2/47G,float      4.31(4.16)     2.67          2.76                                                                                                                                         23.89(3.93)             23.92(23.86)
-向量加复杂化(float)        4.31                                                                                 parallel+for=40.360000,for=14.390000
-*/
     //allocate memory for host pointers
+    h_a = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
+    h_b = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
+    h_c = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
+    h_cpu_results = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
     /*
-    h_a = (T *)aligned_alloc(64, NO_BYTES);
-    h_b = (T *)aligned_alloc(64, NO_BYTES);
-    h_c = (T *)aligned_alloc(64, NO_BYTES);
-    h_cpu_results = (T *)aligned_alloc(64, NO_BYTES);
-    */
+    h_a = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
+    h_b = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
+    h_c = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
+    h_cpu_results = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
     h_a = (T *)malloc(NO_BYTES);
     h_b = (T *)malloc(NO_BYTES);
     h_c = (T *)malloc(NO_BYTES);
     h_cpu_results = (T *)malloc(NO_BYTES);
+    */
     if(h_a == NULL || h_b == NULL || h_c == NULL || h_cpu_results == NULL) {
         printf("malloc failed, exit\n");
         exit(1);
@@ -282,14 +283,21 @@ int exec(int argc, char** argv) {
     int kernel_num;
     char *kernel_name;
     void(*kernel)(T *h_a, T *h_b, T *h_c, const char * kernel_name, size_t w, size_t h, size_t d);
-    kernel_num = 0;
-    //for (kernel_num = 0; kernel_num < 5; kernel_num ++)
+    //kernel_num = 1;
+    for (kernel_num = 0; kernel_num < 5; kernel_num ++)
     {
+        if(kernel_num == 1)
+            continue;
         switch (kernel_num) {
             case 0:
                 kernel_name = "CPU openmp+avx2";
                 break;
             case 1:
+                /*
+                * cat /proc/cpuinfo | grep name | cut -f 2 -d: | uniq -c
+                * 12  12th Gen Intel(R) Core(TM) i5-12400F
+                * 酷睿12代不支持avx512
+                */
                 kernel_name = "CPU openmp+avx512";
                 break;
             case 2:
@@ -323,7 +331,7 @@ int exec(int argc, char** argv) {
             }
             printf("Compare %s %s result with cpu:\n", kernel_name, typeid(T).name());
             compare_arrays(h_c, h_cpu_results, size);
-            if(kernel_num == 1)
+            //if(kernel_num == 1)
                 memcpy(h_cpu_results, h_c, NO_BYTES);
         }
         else{
@@ -350,8 +358,20 @@ int exec(int argc, char** argv) {
 
     return 0;
 }
+/*                                                   32align=64=sizeof(__m256)
+                        cpu            avx2          avx2(aligned)       avx512          avx512(128align)    openmp(for)    avx2+openmp(for)                                                      openmp(parallel+for)    avx2+openmp(paralle+for)  avx2+openmp(paralle+for+schedule)
+*16*16*2/47G,int        4.28(4.25)     2.70(2.70)    2.72                                                    3.93(3.93)      2.72(2.69)                                                           23.860000               23.87                     64.28
+                                                                                                             nowait,2.68(2.700000)
+向量加复杂化(int)         15.40                                                                                 parallel+for=15.34,for=39.510000
+*16*16*2/47G,float      4.31(4.16)     2.67          2.76                                                                                                                                         23.89(3.93)             23.92(23.86)
+向量加复杂化(float)       4.31                                                                                  parallel+for=40.360000,for=14.390000
+
+            cpu         avx2        gpu1d       gpu2d       gpu3d
+int         1.13        0.72        0.038715    0.213941    0.302361
+float       1.11        0.71        0.038708    0.214177    0.304177
+*/
 
 int main(int argc, char** argv) {
-    exec<int>(argc, argv);
-    //exec<float>(argc, argv);
+    //exec<int>(argc, argv);
+    exec<float>(argc, argv);
 }

@@ -74,7 +74,7 @@ void sum_array_cpu_si_avx2(int const *a, int const *b, int *c, size_t size)
     //#pragma omp parallel
     //omp_set_num_threads(procs);
     */
-    #pragma omp parallel for num_threads(12) schedule(static, 1024)
+    //#pragma omp parallel for num_threads(12) schedule(static, 1024)
     for (size_t tid = 0; tid < size / 8; tid++)
     {
         //if(tid % (1 << 26) == 0) {
@@ -124,9 +124,8 @@ void sum_array_cpu_si_avx2(int const *a, int const *b, int *c, size_t size)
 
 void sum_array_cpu_ps_avx2(float const *a, float const *b, float *c, size_t size)
 {
-    /*
     size_t loop = size / 8;
-    #pragma omp parallel for num_threads(12)
+    //#pragma omp parallel for num_threads(12)
     for (size_t tid = 0; tid < loop; tid++)
     {
         __m256 aavx = _mm256_loadu_ps(&a[tid * 8]);
@@ -134,7 +133,7 @@ void sum_array_cpu_ps_avx2(float const *a, float const *b, float *c, size_t size
         __m256 cavx = _mm256_add_ps(aavx, bavx);
         _mm256_storeu_ps(&c[tid*8], cavx);
     }
-    */
+    /*
     //#pragma omp for
     #pragma omp parallel for num_threads(12)
     for (size_t i = 0; i < size; i++)
@@ -146,6 +145,7 @@ void sum_array_cpu_ps_avx2(float const *a, float const *b, float *c, size_t size
         c[i] = a[i] + b[i];
         c[i] = (pow(a[i], 2) + b[i] / 4) / 3;
     }
+    */
 }
 
 template <typename T>
@@ -163,20 +163,23 @@ void sum_array_cpu_simd_avx2(float *h_a, float *h_b, float *h_c, size_t size);
 void sum_array_cpu_si_avx512(int const *a, int const *b, int *c, size_t size)
 {
     size_t loop = size / 16;
-    #pragma omp parallel for
+    //#pragma omp parallel for num_threads(12)
     for (size_t tid = 0; tid < loop; tid++)
     {
-        __m512i aavx = _mm512_loadu_si512((__m512i*)(&a[tid * 16]));
-        __m512i bavx = _mm512_loadu_si512((__m512i*)(&b[tid * 16]));
+        //__m512i aavx = _mm512_loadu_si512((__m512i*)(&a[tid * 16]));
+        __m512i aavx = _mm512_load_si512((__m512i*)(&a[tid * 16]));
+        //__m512i bavx = _mm512_loadu_si512((__m512i*)(&b[tid * 16]));
+        __m512i bavx = _mm512_load_si512((__m512i*)(&b[tid * 16]));
         __m512i cavx = _mm512_add_epi32(aavx, bavx);
-        _mm512_storeu_si512((__m512i*)(&c[tid*16]), cavx);
+        //_mm512_storeu_si512((__m512i*)(&c[tid*16]), cavx);
+        _mm512_store_si512((__m512i*)(&c[tid*16]), cavx);
     }
 }
 
 void sum_array_cpu_ps_avx512(float const *a, float const *b, float *c, size_t size)
 {
     size_t loop = size / 16;
-#pragma omp parallel for
+    //#pragma omp parallel for num_threads(12)
     for (size_t tid = 0; tid < loop; tid++)
     {
         __m512 aavx = _mm512_loadu_ps(&a[tid * 16]);

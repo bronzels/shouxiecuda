@@ -48,7 +48,8 @@ link_directories(/usr/local/cuda/lib64 /usr/lib)
 #link_libraries(cudadevrt ${CUDA_LIBRARIES} ${CUDA_cublas_LIBRARY} openblas pthread OpenCL)
 link_libraries(cudadevrt ${CUDA_LIBRARIES} ${CUDA_cublas_LIBRARY} openblas)
 
-set(SIMDFLAGS "-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2 -mavx512cd -mavx512er -mavx512f -mavx512pf -Wpsabi")
+#set(SIMDFLAGS "-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2 -mavx512cd -mavx512er -mavx512f -mavx512pf -Wpsabi")
+set(SIMDFLAGS "-mavx2 -mavx512f")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS} ${SIMDFLAGS}")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SIMDFLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} ${SIMDFLAGS}")
@@ -101,6 +102,8 @@ cuda_add_executable(misc_opencl_matmul common.cpp misc_opencl_matmul.cpp)
 cuda_add_executable(misc_cub_radixsort common.cpp misc_cub_radixsort.cu)
 cuda_add_executable(misc_cub_thrust_radixsort_many_arrays common.cpp misc_cub_thrust_radixsort_many_arrays.cu)
 cuda_add_executable(misc_sum_matrix_pitched_23d common.cpp misc_sum_matrix_pitched_23d.cu)
+
+cuda_add_executable(pritam pritam.c)
 
 cuda_add_executable(tiandiao_vecadd tiandiao_vecadd.cu)
 cuda_add_executable(tiandiao_stencil tiandiao_stencil.cu)
