@@ -42,13 +42,15 @@ int main( int argc, char* argv[]) {
     initialize(h_b, n, INIT_RANDOM);
 
     sum_array_cpu(h_a, h_b, h_c_cpu, n);
+    printf("print result CPU sum_array\n");
     print_array(h_c_cpu, 16);
     print_array(h_c_cpu + n/2, 16);
     print_array(h_c_cpu + n - 16, 16);
 
     size_t local_size = 128;
     cl::NDRange localSize(local_size);
-    cl::NDRange globalSize(ceil(n/(float)local_size)*local_size);
+    //cl::NDRange globalSize(ceil(n/(float)local_size)*local_size);
+    cl::NDRange globalSize(((n+local_size-1)/local_size)*local_size);
 
     vector<cl::Platform> platforms;
     err |= cl::Platform::get(&platforms);
@@ -58,8 +60,9 @@ int main( int argc, char* argv[]) {
     cl::Device device = devices[0];
 
     cl::Context context({device});
-    cl_queue_properties prop = CL_QUEUE_PROFILING_ENABLE;
-    cl::CommandQueue queue(context, device, &prop, &api_err);
+    //cl_queue_properties prop = CL_QUEUE_PROFILING_ENABLE;
+    //cl::CommandQueue queue(context, device, &prop, &api_err);
+    cl::CommandQueue queue(context, device, nullptr, &api_err);
     err += api_err;
     if ( err != 0 )
     {
@@ -177,11 +180,11 @@ CL_PLATFORM_HOST_TIMER_RESOLUTION:
         printf("enqueue error, code:%d, exit\n", err);
         exit(4);
     }
-    event.wait();
-    cl_ulong time_start, time_end;
-    event.getProfilingInfo(CL_PROFILING_COMMAND_START, &time_start);
-    event.getProfilingInfo(CL_PROFILING_COMMAND_END, &time_end);
-    printf("time spent executing openCL(only kernel) sum_array:%f ms\n", (double)(time_end-time_start)/1000000);
+    //event.wait();
+    //cl_ulong time_start, time_end;
+    //event.getProfilingInfo(CL_PROFILING_COMMAND_START, &time_start);
+    //event.getProfilingInfo(CL_PROFILING_COMMAND_END, &time_end);
+    //printf("time spent executing openCL(only kernel) sum_array:%f ms\n", (double)(time_end-time_start)/1000000);
 
     queue.finish();
 
@@ -189,6 +192,7 @@ CL_PLATFORM_HOST_TIMER_RESOLUTION:
                         bytes, h_c);
     time2 = clock();
     printf("time spent executing openCL sum_array:%f s\n", (double)(time2-time1)/CLOCKS_PER_SEC);
+    printf("print result openCL GPU sum_array\n");
     print_array(h_c, 16);
     print_array(h_c + n/2, 16);
     print_array(h_c + n - 16, 16);

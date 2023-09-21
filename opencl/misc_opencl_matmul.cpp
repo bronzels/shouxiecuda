@@ -7,7 +7,6 @@
 
 #include "cblas.h"
 
-#include "cuda_common.cuh"
 #include "common.hpp"
 #include "cl_common.h"
 

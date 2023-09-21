@@ -84,7 +84,7 @@ void printData(char *msg, int *in, size_t size);
 
 void sum_array_cpu(float* a, float* b, float *c, size_t size);
 
-void print_arrays_toafile(int*, size_t , char* );
+void print_arrays_toafile(int*, int , char* );
 
 void print_arrays_toafile_side_by_side(float*,float*,size_t,char*);
 
