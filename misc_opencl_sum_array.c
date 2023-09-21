@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "cl_common.h"
 
 const char * kernelSource =                                     "\n" \
 "#pragma OPENCL EXTENSION cl_khr_fp64 : enable                   \n" \
@@ -66,7 +67,8 @@ int main( int argc, char* argv[]) {
     print_array_f(h_c_cpu + n - 16, 16);
 
     localSize = 128;
-    globalSize = ceil(n/(float)localSize)*localSize;
+    //globalSize = ceil(n/(float)localSize)*localSize;
+    globalSize = ((n+localSize - 1)/localSize)*localSize;
 
     err = clGetPlatformIDs(1, &platform, NULL);
     //err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
@@ -210,9 +212,10 @@ CL_PLATFORM_HOST_TIMER_RESOLUTION:
     }
     clWaitForEvents(1, &event);
     cl_ulong time_start, time_end;
-    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
-    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
-    printf("time spent executing openCL(only kernel) sum_array:%f ms\n", (double)(time_end-time_start)/1000000);
+    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+    //clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+    //！！！有时不准确，有时出现异常Process finished with exit code 132 (interrupted by signal 4: SIGILL)
+    //printf("time spent executing openCL(only kernel) sum_array:%f ms\n", (double)(time_end-time_start)/1000000);
 
     clFinish(queue);
 

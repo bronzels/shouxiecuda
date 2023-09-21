@@ -10,6 +10,10 @@ using namespace std;
 #include <immintrin.h>
 
 /*
+cat /proc/cpuinfo | grep name | cut -f 2 -d: | uniq -c
+     12  12th Gen Intel(R) Core(TM) i5-12400F
+！！！12代酷睿不支持avx512
+
 gcc -march=knl -dM -E - < /dev/null | egrep "SSE|AVX" | sort
 #define __AVX2__ 1
 #define __AVX512CD__ 1
@@ -74,6 +78,7 @@ void sum_array_cpu_si_avx2(int const *a, int const *b, int *c, size_t size)
     //#pragma omp parallel
     //omp_set_num_threads(procs);
     */
+    //#pragma omp parallel for num_threads(12)
     //#pragma omp parallel for num_threads(12) schedule(static, 1024)
     for (size_t tid = 0; tid < size / 8; tid++)
     {
@@ -125,7 +130,9 @@ void sum_array_cpu_si_avx2(int const *a, int const *b, int *c, size_t size)
 void sum_array_cpu_ps_avx2(float const *a, float const *b, float *c, size_t size)
 {
     size_t loop = size / 8;
+    //去掉nvcc -G以后，加上schedule(static, 1024)会引起segment fault问题
     //#pragma omp parallel for num_threads(12)
+    //#pragma omp parallel for num_threads(12) schedule(static, 1024)
     for (size_t tid = 0; tid < loop; tid++)
     {
         __m256 aavx = _mm256_loadu_ps(&a[tid * 8]);
@@ -587,6 +594,8 @@ template
 void compare_arrays(int * a, int * b, size_t size);
 template
 void compare_arrays(float * a, float * b, size_t size);
+template
+void compare_arrays(unsigned int * a, unsigned int * b, size_t size);
 
 template <class T>
 void compare_arrays(T * a, T * b, size_t size, T precision)

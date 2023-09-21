@@ -404,7 +404,7 @@ void exec_kernel_global(dim3 grid, dim3 block, int * h_output, int * h_ref, int 
 		}
 	}
 
-	print_arrays_toafile(h_aux,grid.x, "aux_array.txt");
+	print_arrays_toafile(h_aux, grid.x, "aux_array.txt");
 
     //sum_aux_values << < grid, block >> > (d_input, d_aux, input_size);
     cudaDeviceSynchronize();

@@ -333,7 +333,7 @@ int main(int argc, char** argv)
 
     float * h_ref_prev = (float*)malloc(byte_size);
     memset((void *)h_ref_prev, 0, byte_size);
-    int kernel_num = 2;
+    int kernel_num = 1;
     //for (int kernel_num = 5; kernel_num < 6; kernel_num ++)
     {
         switch (kernel_num)
@@ -473,6 +473,7 @@ int main(int argc, char** argv)
 
         //compare the CPU and GPU transpose matrix for validity
         printf("Compare CPU with %s\n", kernel_name);
+        //compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1e-3);
         compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1e-2);
         //compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1e-1);
         //compare_matrixes(h_mat_array_mul, h_mat_array_out, m, n, (float)1.0);
@@ -549,9 +550,10 @@ python              23.659889698028564      0.24089908599853516     0.2165956497
 c++                 13.920000               0.072272                0.051916                   0.024310                 0.25         0.07
 
 matrixes: 3072*8 * 1024*8 , 1024*8 * 2048*8; block: 32 * 32
-            cpu(python:numpy, c++:openBLAS)       numba-gpu             numba-gpu_smem        numba-gpu_smem_padded           cuBLAS          pycuda(smem_padded)     cupy                        cuda-python             thrust                    opencl       opencl_smem               wmma
-python      23.06769585609436                     68.0925920009613      88.39668607711792     78.82755780220032                               0.4896623399999953      0.5030193328857422          0.4936636719994567
-c++         115.130000(不转置113.600000)           127.305527            136.070312            168.717697                      0.729070(openblas 1e-1)                                                                     114.42(openblas 1e-1)     65.12        总是0，好像同步不起作用        11.996722(openblas 精度1.0)
+                     cpu(python:numpy, c++:openBLAS)       gpu(python:numba)          gpu_smem(python:numba)        gpu_smem_padded(python:numba)           cuBLAS          pycuda(smem_padded)     cupy                        cuda-python             thrust                        opencl        opencl_smem               wmma
+python               23.06769585609436                     68.0925920009613           88.39668607711792             78.82755780220032                                       0.4896623399999953      0.5030193328857422          0.4936636719994567
+c++(nvcc -G)         115.130000(不转置113.600000)           127.305527(openblas 1e-2)  136.070312(openblas 1e-2)     168.717697(openblas 1e-2)                0.729070(openblas 1e-1)                                                                     114.42(openblas 1e-1)         65.12        总是0，好像同步不起作用        11.996722(openblas 精度1.0)
+c++                  same                                  65.045723(openblas 1e-2)   74.254013(openblas 1e-2)      13.249786(openblas 1e-2)                 0.729070(openblas 1e-1)                                                                     38.814381(openblas 1e-1)      65.12        总是0，好像同步不起作用        1.236969(openblas 精度1.0)
 
 
 

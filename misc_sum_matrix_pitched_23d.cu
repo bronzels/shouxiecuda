@@ -244,20 +244,21 @@ int exec(int argc, char** argv) {
     T *h_a, *h_b, *h_cpu_results, *h_c;
 
     //allocate memory for host pointers
+    /*
     h_a = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
     h_b = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
     h_c = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
     h_cpu_results = (T *)aligned_alloc(sizeof(__m256), NO_BYTES);
-    /*
     h_a = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
     h_b = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
     h_c = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
     h_cpu_results = (T *)aligned_alloc(sizeof(__m512), NO_BYTES);
+    */
+    //！！！align内存后，gpu3d会出错，非法内存
     h_a = (T *)malloc(NO_BYTES);
     h_b = (T *)malloc(NO_BYTES);
     h_c = (T *)malloc(NO_BYTES);
     h_cpu_results = (T *)malloc(NO_BYTES);
-    */
     if(h_a == NULL || h_b == NULL || h_c == NULL || h_cpu_results == NULL) {
         printf("malloc failed, exit\n");
         exit(1);
@@ -267,6 +268,7 @@ int exec(int argc, char** argv) {
     initialize(h_a, size, INIT_RANDOM);
     initialize(h_b, size, INIT_RANDOM);
 
+    printf("Start %s type:%s execution\n", "CPU not optimized", typeid(T).name());
     clock_t cpu_start, cpu_end;
     cpu_start = clock();
     sum_array_cpu(h_a, h_b, h_cpu_results, size);
@@ -283,7 +285,7 @@ int exec(int argc, char** argv) {
     int kernel_num;
     char *kernel_name;
     void(*kernel)(T *h_a, T *h_b, T *h_c, const char * kernel_name, size_t w, size_t h, size_t d);
-    //kernel_num = 1;
+    //kernel_num = 0;
     for (kernel_num = 0; kernel_num < 5; kernel_num ++)
     {
         if(kernel_num == 1)
@@ -313,7 +315,7 @@ int exec(int argc, char** argv) {
                 kernel_name = "GPU(3d)";
                 break;
         }
-        printf("Start %s %s execution\n", kernel_name, typeid(T).name());
+        printf("Start %s type:%s execution\n", kernel_name, typeid(T).name());
         if(kernel_num == 0 || kernel_num == 1) {
             cpu_start = clock();
             if(kernel_num == 0)
@@ -358,7 +360,8 @@ int exec(int argc, char** argv) {
 
     return 0;
 }
-/*                                                   32align=64=sizeof(__m256)
+/*
+                                                     32align=64=sizeof(__m256)
                         cpu            avx2          avx2(aligned)       avx512          avx512(128align)    openmp(for)    avx2+openmp(for)                                                      openmp(parallel+for)    avx2+openmp(paralle+for)  avx2+openmp(paralle+for+schedule)
 *16*16*2/47G,int        4.28(4.25)     2.70(2.70)    2.72                                                    3.93(3.93)      2.72(2.69)                                                           23.860000               23.87                     64.28
                                                                                                              nowait,2.68(2.700000)
@@ -366,12 +369,18 @@ int exec(int argc, char** argv) {
 *16*16*2/47G,float      4.31(4.16)     2.67          2.76                                                                                                                                         23.89(3.93)             23.92(23.86)
 向量加复杂化(float)       4.31                                                                                  parallel+for=40.360000,for=14.390000
 
+*8*8*2/cpu:11 G/gpu:8 G
+nvcc -G -g
             cpu         avx2        gpu1d       gpu2d       gpu3d
 int         1.13        0.72        0.038715    0.213941    0.302361
 float       1.11        0.71        0.038708    0.214177    0.304177
+nvcc
+            cpu         avx2        gpu1d       gpu2d       gpu3d
+int         1.14        0.71        0.028405    0.028378    0.006202
+float       1.08        0.73        0.028407    0.028376    0.006201
 */
 
 int main(int argc, char** argv) {
-    //exec<int>(argc, argv);
-    exec<float>(argc, argv);
+    exec<int>(argc, argv);
+    //exec<float>(argc, argv);
 }

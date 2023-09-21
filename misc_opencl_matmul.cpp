@@ -9,6 +9,7 @@
 
 #include "cuda_common.cuh"
 #include "common.hpp"
+#include "cl_common.h"
 
 using namespace std;
 
@@ -63,9 +64,10 @@ int main( int argc, char* argv[]) {
     printf("openBLAS time: %f \n", (double)((double)(t_stop - t_start)/CLOCKS_PER_SEC));
     if ( print_a)
     {
-        print_matrix(h_c_cpu, 2, 10);
-        print_matrix(h_c_cpu + m * n / 2, 2, 10);
-        print_matrix(h_c_cpu + (m - 2) * n, 2, 10);
+        print_matrix(h_c_cpu, 1, 10);
+        print_matrix(h_c_cpu + m * n / 2 - 10, 1, 10);
+        print_matrix(h_c_cpu + m * n / 2, 1, 10);
+        print_matrix(h_c_cpu + m * n - 10, 1, 10);
     }
 
     cl::NDRange localSize(block_x, block_y);
@@ -91,8 +93,9 @@ int main( int argc, char* argv[]) {
     }
 
     cl::Context context({device});
-    cl_queue_properties prop = CL_QUEUE_PROFILING_ENABLE;
-    cl::CommandQueue queue(context, device, &prop, &api_err);
+    //cl_queue_properties prop = CL_QUEUE_PROFILING_ENABLE;
+    //cl::CommandQueue queue(context, device, &prop, &api_err);
+    cl::CommandQueue queue(context, device, nullptr, &api_err);
     if ( api_err != CL_SUCCESS )
     {
         printf("cl command queue create error, code:%d, exit\n", api_err);
@@ -172,8 +175,8 @@ int main( int argc, char* argv[]) {
     kernel.setArg(5, d_c);
     kernel.setArg(6, d_lock);
 
+    printf("Start executing openCL matmul\n");
     cl::Event event;
-    clock_t time3,time4;
     time1 = clock();
     err |= queue.enqueueNDRangeKernel(kernel, NULL, globalSize, localSize, NULL, &event);
     if ( err != CL_SUCCESS )
@@ -181,27 +184,27 @@ int main( int argc, char* argv[]) {
         printf("enqueue error, code:%d, exit\n", err);
         exit(1);
     }
-    queue.enqueueBarrierWithWaitList(NULL, &event);
-    //queue.finish();
+    //queue.enqueueBarrierWithWaitList(NULL, &event);
+    queue.finish();
     time2 = clock();
     printf("time spent executing openCL(clock delta) mat_mul:%f s\n", (double)(time2-time1)/CLOCKS_PER_SEC);
     //！！！很不稳定，不可用，有时一直是0，有时是非常大的数
     //event.wait();
+    /*
     cl_ulong time_start, time_end;
     event.getProfilingInfo(CL_PROFILING_COMMAND_START, &time_start);
     event.getProfilingInfo(CL_PROFILING_COMMAND_END, &time_end);
     printf("time spent executing openCL(opencl profiling) mat_mul:%f ms\n", (double)(time_end-time_start)/1000000);
+    */
 
     queue.enqueueReadBuffer(d_c, CL_TRUE, 0,
                             byte_size, h_c);
     if ( print_a)
     {
-        /*
-        print_matrix(h_c, 2, 10);
-        print_matrix(h_c + m * n / 2, 2, 10);
-        print_matrix(h_c + (m - 2) * n, 2, 10);
-        */
-        print_matrix(h_c, m, n);
+        print_matrix(h_c, 1, 10);
+        print_matrix(h_c + m * n / 2 - 10, 1, 10);
+        print_matrix(h_c + m * n / 2, 1, 10);
+        print_matrix(h_c + m * n - 10, 1, 10);
     }
 
     printf("Compare openCL result with CPU openblas: \n");

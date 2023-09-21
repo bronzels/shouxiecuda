@@ -4,6 +4,7 @@
 #include <CL/cl.hpp>
 
 #include "cuda_common.cuh"
+#include "cl_common.h"
 
 int main(int argc, char** argv) {
     ::ShowCudaGpuInfo();

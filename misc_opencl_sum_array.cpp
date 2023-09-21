@@ -5,6 +5,7 @@
 #include <CL/cl.hpp>
 
 #include "common.hpp"
+#include "cl_common.h"
 
 using namespace std;
 
