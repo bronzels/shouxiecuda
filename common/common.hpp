@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <fstream>
 
+void cpu_timer_start(struct timespec *tstart_cpu);
+double cpu_timer_stop(struct timespec tstart_cpu);
+
 template <typename T>
 void sum_array_cpu_simd_avx2(T *h_a, T *h_b, T *h_c, size_t size);
 
