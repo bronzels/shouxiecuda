@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 #！！！OpenACC_FOUND New in version 3.25.
 #！！！export PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/23.7/compilers/bin:/opt/nvidia/hpc_sdk/Linux_x86_64/23.7/comm_libs/mpi/bin:/usr/local/NVIDIA-Nsight-Compute:/opt/nvidia/nsight-systems/systems/bin:/usr/local/bin:/opt/rh/devtoolset-10/root/usr/bin:/opt/rh/devtoolset-7/root/usr/bin:/data0/envs/deepspeed/bin:/usr/local/miniconda3/condabin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/local/cuda/bin:/data0/ant/bin:/usr/local/swig/bin:/root/bin
-project(shouxiecuda_openacc)
+project(openacc_c)
 
 set(CMAKE_C_STANDARD 99)
 
@@ -86,9 +86,9 @@ if(CUDA_FOUND AND OpenMP_FOUND AND OpenACC_FOUND)
 
     message("CMAKE_C_FLAGS = ${CMAKE_C_FLAGS}")
 
-    add_executable(epc_mass_sum epc_mass_sum.c epc_mass_main.c)
+    add_executable(epc_mass_c epc_mass_sum.c epc_mass_main.c)
     set_source_files_properties(epc_mass_sum.c PROPERTIES COMPILE_FLAGS "${OpenACC_C_FLAGS}")
-    set_target_properties(epc_mass_sum PROPERTIES LINK_FLAGS "${OpenACC_C_OPTIONS}")
+    set_target_properties(epc_mass_c PROPERTIES LINK_FLAGS "${OpenACC_C_OPTIONS}")
 
     add_custom_target(distclean COMMAND rm -rf cmake-build-* CMakeCache.txt CMakeFiles
             Makefile cmake_install.cmake *.dSYM ipo_out.optrpt *.o)
