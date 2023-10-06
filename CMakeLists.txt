@@ -7,7 +7,6 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_ARCHITECTURES 52 60 61 75 86 87)
 
 #file(COPY model1.onnx DESTINATION .)
-file(COPY misc_opencl_matmul.cl DESTINATION .)
 
 # CUDA
 find_package(CUDA REQUIRED)
@@ -92,7 +91,7 @@ cuda_add_executable(misc_cuda_sort common/common.cpp misc_cuda_quicksort.cu)
 
 cuda_add_executable(misc_cub_radixsort common/common.cpp misc_cub_radixsort.cu)
 cuda_add_executable(misc_cub_thrust_radixsort_many_arrays common/common.cpp misc_cub_thrust_radixsort_many_arrays.cu)
-cuda_add_executable(misc_sum_matrix_pitched_23d common/common.cpp misc_sum_matrix_pitched_23d.cu)
+cuda_add_executable(misc_sum_matrix_pitched_23d common/common.cpp common/simd.cpp misc_sum_matrix_pitched_23d.cu)
 
 cuda_add_executable(test_simd test_simd.c)
 

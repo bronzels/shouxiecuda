@@ -5,6 +5,7 @@
 #include "helper_functions.h"
 
 #include "common.hpp"
+#include "simd.hpp"
 
 #include <stdio.h>
 #include <ctime>
